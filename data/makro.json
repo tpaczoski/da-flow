@@ -1,0 +1,346 @@
+{
+"gen": "2026-11-08",
+"note": "Harmonogramy: BLS, BEA, Fed, ECB, BoE, BoJ, ISM; czas polski",
+"ev": [
+{
+"sess": "2026-10-01",
+"d": "2026-10-01",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-01",
+"d": "2026-10-01",
+"t": "16:00",
+"cc": "US",
+"nm": "ISM przemysł (wrz)",
+"imp": 3,
+"src": "ISM",
+"loc": "10:00 New York"
+},
+{
+"sess": "2026-10-02",
+"d": "2026-10-02",
+"t": "14:30",
+"cc": "US",
+"nm": "Raport z rynku pracy NFP (wrz)",
+"imp": 3,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-05",
+"d": "2026-10-05",
+"t": "16:00",
+"cc": "US",
+"nm": "ISM usługi (wrz)",
+"imp": 2,
+"src": "ISM",
+"loc": "10:00 New York"
+},
+{
+"sess": "2026-10-06",
+"d": "2026-10-06",
+"t": "14:30",
+"cc": "US",
+"nm": "Bilans handlowy (sie)",
+"imp": 2,
+"src": "BEA",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-08",
+"d": "2026-10-08",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-14",
+"d": "2026-10-14",
+"t": "14:30",
+"cc": "US",
+"nm": "CPI inflacja (wrz)",
+"imp": 3,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-15",
+"d": "2026-10-15",
+"t": "14:30",
+"cc": "US",
+"nm": "PPI (wrz)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-15",
+"d": "2026-10-15",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-16",
+"d": "2026-10-16",
+"t": "14:30",
+"cc": "US",
+"nm": "Ceny importu i eksportu (wrz)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-22",
+"d": "2026-10-22",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-28",
+"d": "2026-10-28",
+"t": "19:00",
+"cc": "US",
+"nm": "FOMC – decyzja o stopach",
+"imp": 3,
+"src": "Fed",
+"loc": "14:00 New York"
+},
+{
+"sess": "2026-10-28",
+"d": "2026-10-28",
+"t": "19:30",
+"cc": "US",
+"nm": "FOMC – konferencja prasowa",
+"imp": 3,
+"src": "Fed",
+"loc": "14:30 New York"
+},
+{
+"sess": "2026-10-29",
+"d": "2026-10-29",
+"t": "13:30",
+"cc": "US",
+"nm": "PKB Q3 (wstępny)",
+"imp": 3,
+"src": "BEA",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-29",
+"d": "2026-10-29",
+"t": "13:30",
+"cc": "US",
+"nm": "Dochody i wydatki, PCE (wrz)",
+"imp": 3,
+"src": "BEA",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-29",
+"d": "2026-10-29",
+"t": "13:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-10-29",
+"d": "2026-10-29",
+"t": "14:15",
+"cc": "EU",
+"nm": "EBC – decyzja o stopach",
+"imp": 3,
+"src": "ECB",
+"loc": "14:15 Berlin"
+},
+{
+"sess": "2026-10-29",
+"d": "2026-10-29",
+"t": "14:45",
+"cc": "EU",
+"nm": "EBC – konferencja prasowa",
+"imp": 3,
+"src": "ECB",
+"loc": "14:45 Berlin"
+},
+{
+"sess": "2026-10-30",
+"d": "2026-10-30",
+"t": "04:00",
+"cc": "JP",
+"nm": "BoJ – decyzja o stopach (godzina orientacyjna)",
+"imp": 3,
+"src": "BoJ",
+"loc": "12:00 Tokyo"
+},
+{
+"sess": "2026-10-30",
+"d": "2026-10-30",
+"t": "13:30",
+"cc": "US",
+"nm": "Indeks kosztów zatrudnienia ECI (Q3)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-02",
+"d": "2026-11-02",
+"t": "16:00",
+"cc": "US",
+"nm": "ISM przemysł (paź)",
+"imp": 3,
+"src": "ISM",
+"loc": "10:00 New York"
+},
+{
+"sess": "2026-11-03",
+"d": "2026-11-03",
+"t": "16:00",
+"cc": "US",
+"nm": "JOLTS – wolne miejsca pracy (wrz)",
+"imp": 2,
+"src": "BLS",
+"loc": "10:00 New York"
+},
+{
+"sess": "2026-11-04",
+"d": "2026-11-04",
+"t": "14:30",
+"cc": "US",
+"nm": "Bilans handlowy (wrz)",
+"imp": 2,
+"src": "BEA",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-04",
+"d": "2026-11-04",
+"t": "16:00",
+"cc": "US",
+"nm": "ISM usługi (paź)",
+"imp": 2,
+"src": "ISM",
+"loc": "10:00 New York"
+},
+{
+"sess": "2026-11-05",
+"d": "2026-11-05",
+"t": "13:00",
+"cc": "UK",
+"nm": "BoE – decyzja o stopach",
+"imp": 3,
+"src": "BoE",
+"loc": "12:00 London"
+},
+{
+"sess": "2026-11-05",
+"d": "2026-11-05",
+"t": "14:30",
+"cc": "US",
+"nm": "Wydajność i koszty pracy (Q3)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-05",
+"d": "2026-11-05",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-06",
+"d": "2026-11-06",
+"t": "14:30",
+"cc": "US",
+"nm": "Raport z rynku pracy NFP (paź)",
+"imp": 3,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-10",
+"d": "2026-11-10",
+"t": "14:30",
+"cc": "US",
+"nm": "CPI inflacja (paź)",
+"imp": 3,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-12",
+"d": "2026-11-12",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-13",
+"d": "2026-11-13",
+"t": "14:30",
+"cc": "US",
+"nm": "PPI (paź)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-17",
+"d": "2026-11-17",
+"t": "14:30",
+"cc": "US",
+"nm": "Ceny importu i eksportu (paź)",
+"imp": 2,
+"src": "BLS",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-19",
+"d": "2026-11-19",
+"t": "14:30",
+"cc": "US",
+"nm": "Wnioski o zasiłek dla bezrobotnych",
+"imp": 2,
+"src": "DOL",
+"loc": "08:30 New York"
+},
+{
+"sess": "2026-11-25",
+"d": "2026-11-25",
+"t": "14:30",
+"cc": "US",
+"nm": "Dochody i wydatki, PCE (paź)",
+"imp": 3,
+"src": "BEA",
+"loc": "08:30 New York"
+}
+]
+}

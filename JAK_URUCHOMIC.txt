@@ -1,0 +1,22 @@
+DA Flow v1.9 – silnik (stan 16.11.2026, commit 3c7dce8)
+=========================================================
+Zawartość
+  app.js, head.html, body.html   – źródła panelu (cała logika w app.js)
+  build.py                       – składa footprint_us500.html (wersja wewnętrzna, przełącznik Nauka/Laboratorium)
+                                   i footprint_nauka.html (wersja publiczna, zablokowana w trybie Nauka)
+  footprint_us500.html           – gotowa strona (US500 osadzony w środku)
+  opcje_dn.html                  – okno opcji SPX (DN 1.9.2)
+  export.py, tools/              – eksport danych DA, dzienne zamknięcia, makro, opcje, plany
+  docs/sesje_rynkow.md           – plan sesji rynków (noc / sesja kasowa / po sesji)
+  README_DA_Flow_v1.md           – opis wersji v1
+  data/                          – małe pliki: US500, makro, archiwum opcji, zamknięcia dzienne
+
+Dane wszystkich rynków (39 plików JSON) są w osobnym archiwum DA_Flow_dane_2026-11-13.zip –
+rozpakuj jego katalog data/ do katalogu data/ obok footprint_us500.html.
+
+Uruchomienie lokalne
+  1. python3 build.py              (po zmianach w app.js / head.html / body.html / data/US500.json)
+  2. python3 -m http.server 8000   (w tym katalogu; strona wczytuje data/*.json, więc nie działa z file://)
+  3. http://localhost:8000/footprint_us500.html
+
+Analiza rynku, nie rekomendacja.

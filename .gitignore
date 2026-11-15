@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.npy
+research/**/*_rows.csv
+node_modules/
+.DS_Store
+.update_live.lock
+.git-askpass
+*.bak
+footprint_nauka.html
+out/
