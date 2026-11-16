@@ -35,7 +35,7 @@ html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);f
 #stale[hidden],#msg:empty,.col[hidden]{display:none}
 .cols{display:flex;gap:26px;padding:14px 18px 6px;align-items:flex-start}
 .col{flex:3 1 0;min-width:0}
-.col.prof{flex:1.25 1 0}
+.col.prof{flex:1.7 1 0}
 .ch{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;padding-left:44px;min-height:22px}
 .ch .tf{font-size:18px;font-weight:700;color:var(--navy)}
 .ch .d{font-size:15px;font-weight:700}
@@ -182,9 +182,9 @@ function volMap(bars) {
   for (const b of bars) for (const [p, bi, a] of b.lv) { const k = fbin(p); m.set(k, (m.get(k) || 0) + bi + a); }
   return m;
 }
-function refs(bars) { // IB 15:30–16:30 PL, ONH + nVAH from night 00:00–15:30 PL (as footprint_multi.overnight_and_ib)
+function refs(bars, sess) { // IB 15:30–16:30 PL, ONH + nVAH from night 00:00–15:30 PL (as footprint_multi.overnight_and_ib)
   if (!bars.length) return [];
-  const day = wp(bars[bars.length - 1].ms).day;
+  const day = sess || wp(bars[bars.length - 1].ms).day;
   const night = [], ib = [];
   for (const b of bars) {
     const w = wp(b.ms); if (w.day !== day) continue;
@@ -355,19 +355,44 @@ function drawProfile(cv, bars, price, H, win) {
   const vm = volMap(bars), va = va70(vm);
   if (!va) return null;
   const [ctx, W] = fit(cv, H);
-  const lo = va.ps[0] - 1, hi = va.ps[va.ps.length - 1] + 1;
+  // daily OHLC of session D (23:00 PL D-1 → 23:00 PL D): O = first M1 bar at/after 23:00 D-1, H/L = session extremes, C = latest price
+  const dO = bars[0].o, dH = Math.max(...bars.map(b => b.h)), dL = Math.min(...bars.map(b => b.l)), dC = price;
+  const oMin = wp(bars[0].ms).min, oFull = oMin === 23 * 60;
+  const oLab = oFull ? 'O od 23:00' : 'O od ' + fmtHM.format(new Date(bars[0].ms));
+  const lo = Math.floor(Math.min(va.ps[0], dL)) - 1, hi = Math.ceil(Math.max(va.ps[va.ps.length - 1] + 1, dH)) + 1;
   const L = 40, R = 6, T = 4, B = H - 4;
   const Y = p => T + (hi - p) / (hi - lo) * (B - T);
   const pw = W - L - R, maxV = Math.max(...va.vs);
-  GEO[cv.id] = { type: 'prof', W, H, L, pw, T, B, lo, hi, vm };
+  const CW = 84, HX = L + CW; // candle strip between axis and histogram
+  GEO[cv.id] = { type: 'prof', W, H, L, pw, T, B, lo, hi, vm, CW, ohlc: { o: dO, h: dH, l: dL, c: dC, lab: oLab } };
   ctx.fillStyle = 'rgba(29,78,216,.06)'; ctx.fillRect(L, Y(va.vah + 1), pw, Y(va.val) - Y(va.vah + 1));
   if (win) { ctx.fillStyle = 'rgba(201,162,39,.08)'; ctx.fillRect(L, Y(win[1]), pw, Y(win[0]) - Y(win[1])); }
   const rh = Math.max(1.5, (B - T) / (hi - lo) * 0.86);
   va.ps.forEach((p, k) => {
-    const w = va.vs[k] / maxV * (pw - 70);
+    const w = va.vs[k] / maxV * (pw - CW - 62);
     ctx.fillStyle = p === va.poc ? C.poc : (p >= va.val && p <= va.vah ? '#7aa2d6' : '#cbd5e1');
-    ctx.fillRect(L, Y(p + 0.5) - rh / 2, w, rh);
+    ctx.fillRect(HX, Y(p + 0.5) - rh / 2, w, rh);
   });
+  // daily candle (D1)
+  const up = dC >= dO, ccol = up ? C.green : C.red, cx = L + 16, bw = 12;
+  ctx.fillStyle = 'rgba(250,251,252,.85)'; ctx.fillRect(L + 1, T + 1, CW - 6, B - T - 2);
+  ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L + CW - 4, T); ctx.lineTo(L + CW - 4, B); ctx.stroke();
+  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 0.9; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(L, Y(dO)); ctx.lineTo(W - R, Y(dO)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx, Y(dH)); ctx.lineTo(cx, Y(dL)); ctx.stroke();
+  const yb1 = Y(Math.max(dO, dC)), yb2 = Y(Math.min(dO, dC));
+  ctx.fillStyle = ccol; ctx.fillRect(cx - bw / 2, yb1, bw, Math.max(2, yb2 - yb1));
+  { // O/H/L/C labels beside the candle, de-overlapped
+    const items = [['H', dH, C.text], ['O', dO, '#475569'], ['C', dC, ccol], ['L', dL, C.text]]
+      .map(([k, v, col]) => ({ k, v, col, y: Y(v) })).sort((a, b) => a.y - b.y);
+    if (items[0].y < T + 24) items[0].y = T + 24;
+    for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 11) items[i].y = items[i - 1].y + 11;
+    const over = items[items.length - 1].y - (B - 6); if (over > 0) items.forEach(it => it.y -= over);
+    font(ctx, 8.5, true); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    for (const it of items) { ctx.fillStyle = it.col; ctx.fillText(`${it.k} ${fpx(it.v)}`, cx + bw / 2 + 4, it.y); }
+    font(ctx, 8, true); ctx.fillStyle = C.navy; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('D1', L + 4, T + 3);
+    font(ctx, 8); ctx.fillStyle = oFull ? C.muted : '#b45309'; ctx.fillText(oLab, L + 4, T + 13);
+  }
   const lab = (y, t, col, bold) => { font(ctx, 9.5, bold); ctx.fillStyle = col; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - R, y); };
   ctx.setLineDash([3, 2]); ctx.lineWidth = 1;
   for (const [p, col] of [[va.vah + 1, C.nvah], [va.val, C.nvah]]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(W - R, Y(p)); ctx.stroke(); }
@@ -445,7 +470,10 @@ function drawCross() {
         tag(ctx, g.L - 1, y, fpx(Math.round(CROSS.price * 10) / 10), 'right');
         tag(ctx, g.L + g.pw, y - 12, 'wol. ' + fint(g.vm.get(b) || 0), 'right', '#475569');
       }
-      if (src) dash(ctx, CROSS.x, g.T, CROSS.x, g.B);
+      if (src) {
+        dash(ctx, CROSS.x, g.T, CROSS.x, g.B);
+        if (CROSS.x < g.L + g.CW) { const o = g.ohlc; tag(ctx, g.L + 2, (CROSS.y > (g.T + g.B) / 2 ? g.T + 36 : g.B - 30), `O ${fpx(o.o)} H ${fpx(o.h)} L ${fpx(o.l)} C ${fpx(o.c)}`, 'left', o.c >= o.o ? C.green : C.red); }
+      }
     }
   }
 }
@@ -496,7 +524,7 @@ function render(data) {
   let ymin = Math.floor(Math.min(...vb.map(c => c.l)) - 1e-9) - 2, ymax = Math.ceil(Math.max(...vb.map(c => c.h)) - 1e-9) + 2;
   ymin = Math.min(ymin, Math.floor(price - 3)); ymax = Math.max(ymax, Math.ceil(price + 3));
   const rowH = Math.max(13, Math.min(19, (window.innerHeight - 330) / (ymax - ymin)));
-  const refItems = refs(bars);
+  const refItems = refs(bars, data.session);
   let fpTotal = Math.round((ymax - ymin) * rowH) + 4 + 26 + 70 + 76;
   for (const [k, tf] of Object.entries(TF)) {
     if (!VIS[k]) continue;
@@ -509,7 +537,7 @@ function render(data) {
     if (va) {
       const d = $('hProf');
       d.innerHTML = `<span class="tf">Profil sesji</span>`;
-      $('sProf').innerHTML = `<b style="color:#8a6d00">POC ${fpx(va.poc)}</b> · <b style="color:${C.nvah}">VAH ${fpx(va.vah)} · VAL ${fpx(va.val)}</b><br>cała sesja od ${fmtHM.format(new Date(bars[0].ms))} PL · 70% VA${visTf.length ? ' · żółte tło = okno footprintu' : ''}`;
+      $('sProf').innerHTML = `<b style="color:#8a6d00">POC ${fpx(va.poc)}</b> · <b style="color:${C.nvah}">VAH ${fpx(va.vah)} · VAL ${fpx(va.val)}</b><br>sesja od ${fmtHM.format(new Date(bars[0].ms))} PL (doba 23:00–23:00) · świeca D1 · 70% VA${visTf.length ? ' · żółte tło = okno footprintu' : ''}`;
     }
   }
   const nv = refItems.find(r => r[1] === 'nVAH'), onh = refItems.find(r => r[1] === 'ONH');
