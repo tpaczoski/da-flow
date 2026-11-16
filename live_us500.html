@@ -433,6 +433,7 @@ function ovCtx(id) {
 function tag(ctx, x, y, t, align, bg) {
   font(ctx, 10, true); const tw = ctx.measureText(t).width + 8;
   let bx = align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x;
+  const cwCss = ctx.canvas.width / Math.max(1, window.devicePixelRatio || 1); bx = Math.max(0, Math.min(bx, cwCss - tw - 1));
   ctx.fillStyle = bg || '#334155'; rrect(ctx, bx, y - 8, tw, 16, 3); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 4, y);
 }
