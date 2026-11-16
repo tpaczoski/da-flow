@@ -91,10 +91,11 @@ canvas{display:block;width:100%}
 <div class="foot" id="foot">Ładowanie…</div>
 <script>
 const TZ = 'Europe/Warsaw';
-const N = 6, STEP = 1, IMB = 3;
+const NMAX = 8, STEP = 1, IMB = 3;
+const MIN_CELLS_W = 70, CANDLE_GUTTER = 11, MIN_FONT = 10;
 const C = {
-  navy:'#1b3a5f', green:'#1b7a4a', greenSoft:'#dcefe2', greenCell:'#b7e0c4',
-  red:'#c0392b', redSoft:'#f6d6d3', redCell:'#f0b8b4', muted:'#6b7280', text:'#1a1d23',
+  navy:'#1b3a5f', green:'#1b7a4a', greenSoft:'#b6e8c5', greenCell:'#5fd48a',
+  red:'#c0392b', redSoft:'#f5aea8', redCell:'#ef7a72', muted:'#6b7280', text:'#1a1d23',
   poc:'#c9a227', vwap:'#9333ea', ib:'#7c3aed', onh:'#7A4FA0', nvah:'#0e7490', price:'#1d4ed8',
   spine:'#cbd5e1', grey:'#f4f5f7'
 };
@@ -226,32 +227,36 @@ function niceStep(r) { const m = Math.pow(10, Math.floor(Math.log10(Math.max(1e-
 function tickStep(span) { return span > 40 ? 5 : span > 16 ? 2 : 1; }
 
 function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
-  const bars = visibleSlice(all, tf), n = bars.length;
-  const L = 44, T = 4;
+  const T = 4;
   const fpH = Math.round((ymax - ymin) * rowH);
-  const gap = 26, accH = 70, rowsH = 76;
+  const gap = 44, accH = 70, rowsH = 76;
   const H = T + fpH + gap + accH + rowsH;
   const [ctx, W] = fit(cv, H);
-  // right gutter for price / VWAP / ref tags — never drawn over bid×ask cells
+  // left axis gutter for price / VWAP / ref tags — never drawn over bid×ask cells
   const labW = (t, px, bold, pad) => { font(ctx, px, bold); return ctx.measureText(t).width + pad; };
   const vwapIn = vwap != null && vwap >= ymin && vwap <= ymax;
-  const vwapLab = vwap == null ? null : (vwapIn ? 'VWAP ' + fpx(Math.round(vwap * 10) / 10) : `VWAP ${vwap > ymax ? '↑' : '↓'} ${fpx(Math.round(vwap * 10) / 10)}`);
+  const vwapLab = vwap == null ? null : (vwapIn ? 'V ' + fpx(Math.round(vwap * 10) / 10) : `V ${vwap > ymax ? '↑' : '↓'} ${fpx(Math.round(vwap * 10) / 10)}`);
+  const refShort = lab => lab === 'IB High' ? 'IBH' : lab === 'IB Low' ? 'IBL' : lab;
   let need = 52;
   if (price != null) need = Math.max(need, labW(fpx(price), 10, true, 14));
   if (vwapLab) need = Math.max(need, labW(vwapLab, 9.5, true, 12));
   for (const [y, lab] of refItems) {
     if (y < ymin || y > ymax) continue;
-    need = Math.max(need, labW(`${lab} ${fpx(y)}`, 9.5, false, 12));
+    need = Math.max(need, labW(`${refShort(lab)} ${fpx(y)}`, 9.5, false, 12));
   }
-  const R = Math.max(58, Math.min(92, Math.ceil(need + 4)));
+  const L = Math.max(56, Math.min(78, Math.ceil(need + 4)));
+  const R = 8;
   const pw = W - L - R;
+  const nFit = fitN(W, L, R);
+  const bars = visibleSlice(all, tf, nFit);
+  const n = bars.length;
   const xOff = 0.60;
   const X = u => L + (u + xOff) / (n + 0.24) * pw;
   const unit = pw / (n + 0.24);
   const Y = p => T + (ymax - p) / (ymax - ymin) * fpH;
   const colW = unit * 0.96;
-  // reserved candle gutter left of bid×ask; body is inset so it never meets the text
-  const gutter = Math.max(16, Math.min(22, Math.round(unit * 0.28)));
+  // narrow reserved candle gutter left of bid×ask
+  const gutter = CANDLE_GUTTER;
   const cellsW = Math.max(8, colW - gutter);
   // frame + grid
   ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, fpH); ctx.clip();
@@ -260,10 +265,10 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(L + pw, Y(p)); ctx.stroke();
   }
   const fcell = v => (v == null ? '—' : String(Math.round(v)));
-  const midGap = Math.max(6, Math.min(10, cellsW * 0.16));
+  const midGap = Math.max(7, Math.min(10, cellsW * 0.14));
   const padX = 1.5;
   const numMaxW = Math.max(4, (cellsW - midGap) / 2 - padX);
-  let fs = Math.max(6, Math.min(11, rowH * 0.70));
+  let fs = Math.max(MIN_FONT, Math.min(12, rowH * 0.62));
   const labels = [];
   for (const c of bars) for (const [p, [bi, a]] of c.lv) {
     if (p < ymin || p > ymax - 1e-9) continue;
@@ -272,12 +277,11 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   font(ctx, fs);
   let maxLab = 0;
   for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
-  while (fs > 6 && maxLab > numMaxW) {
+  while (fs > MIN_FONT && maxLab > numMaxW) {
     fs -= 0.5; font(ctx, fs); maxLab = 0;
     for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
   }
-  const showNums = maxLab <= numMaxW + 0.4;
-  const fsX = Math.max(5.5, Math.min(fs - 1, midGap - 1));
+  const fsX = Math.max(8, Math.min(fs - 1, midGap - 1));
   bars.forEach((c, i) => {
     const x0 = X(i - 0.48), cellsX = x0 + gutter;
     ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, colW, fpH);
@@ -285,12 +289,11 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 0.6; ctx.strokeRect(x0, T, colW, fpH);
     ctx.strokeStyle = '#e2e6ea'; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(cellsX, T); ctx.lineTo(cellsX, T + fpH); ctx.stroke();
-    // OHLC candle fully inside the gutter (inset on both sides)
-    const inset = 2.5;
-    const bodyW = Math.max(8, Math.min(14, gutter - inset * 2));
+    // thin OHLC candle fully inside the narrow gutter
+    const bodyW = 5;
     const cx = x0 + gutter / 2;
     const ccol = c.c >= c.o ? C.green : C.red;
-    ctx.strokeStyle = ccol; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = ccol; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(cx, Y(c.h)); ctx.lineTo(cx, Y(c.l)); ctx.stroke();
     let yTopB = Y(Math.max(c.o, c.c)), yBotB = Y(Math.min(c.o, c.c));
     if (yBotB - yTopB < 2) { const mid = (yTopB + yBotB) / 2; yTopB = mid - 1; yBotB = mid + 1; }
@@ -306,24 +309,22 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
       const intens = Math.min(1, Math.pow((bi + a) / c.maxv, 0.7));
       const fl = c.flags.get(p);
       const sell = fl === 'sell' || fl === 'both', buy = fl === 'buy' || fl === 'both';
-      ctx.globalAlpha = 0.40 + 0.50 * intens;
+      ctx.globalAlpha = 0.78 + 0.22 * intens;
       ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(cellsX, yTop, cellsW / 2, hh);
       ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(cellsX + cellsW / 2, yTop, cellsW / 2, hh);
       ctx.globalAlpha = 1;
-      if (showNums) {
-        ctx.textBaseline = 'middle';
-        ctx.save();
-        ctx.beginPath(); ctx.rect(cellsX, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
-        font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
-        ctx.textAlign = 'right'; ctx.fillText(fcell(bi), bidRight, yc);
-        ctx.restore();
-        font(ctx, fsX); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('×', midX, yc);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(cellsX + cellsW / 2, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
-        font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
-        ctx.textAlign = 'left'; ctx.fillText(fcell(a), askLeft, yc);
-        ctx.restore();
-      }
+      ctx.textBaseline = 'middle';
+      ctx.save();
+      ctx.beginPath(); ctx.rect(cellsX, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
+      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
+      ctx.textAlign = 'right'; ctx.fillText(fcell(bi), bidRight, yc);
+      ctx.restore();
+      font(ctx, fsX); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('×', midX, yc);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(cellsX + cellsW / 2, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
+      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
+      ctx.textAlign = 'left'; ctx.fillText(fcell(a), askLeft, yc);
+      ctx.restore();
       if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(cellsX + 1, yTop + 1, cellsW - 2, hh - 2); }
     }
   });
@@ -347,13 +348,14 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   });
   ctx.stroke();
   ctx.setLineDash([]); ctx.restore();
-  // labels in the right price gutter (outside bid×ask cells)
+  // labels in the left axis gutter (outside bid×ask cells)
   const used = [];
-  const lx = L + pw + 3;
+  const leftBox = (tw, yy, h) => { const bx = Math.max(1, L - 2 - tw); return [bx, yy - h / 2, tw, h]; };
   if (price != null && price >= ymin && price <= ymax) {
     font(ctx, 10, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
-    ctx.fillStyle = C.price; rrect(ctx, lx, Y(price) - 9, tw, 18, 3); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 6, Y(price));
+    const [bx, by, bw, bh] = leftBox(tw, Y(price), 18);
+    ctx.fillStyle = C.price; rrect(ctx, bx, by, bw, bh, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 6, Y(price));
     used.push(Y(price));
   }
   if (vwapLab) {
@@ -362,43 +364,74 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     let yy = vwapIn ? Y(vwap) : (vwap > ymax ? T + 10 : T + fpH - 10);
     for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
     used.push(yy);
-    if (vwapIn) { ctx.fillStyle = C.vwap; rrect(ctx, lx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.fillStyle = '#fff'; }
-    else { ctx.fillStyle = '#fff'; rrect(ctx, lx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = C.vwap; }
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(vwapLab, lx + 5, yy);
+    const [bx, by, bw, bh] = leftBox(tw, yy, 17);
+    if (vwapIn) { ctx.fillStyle = C.vwap; rrect(ctx, bx, by, bw, bh, 3); ctx.fill(); ctx.fillStyle = '#fff'; }
+    else { ctx.fillStyle = '#fff'; rrect(ctx, bx, by, bw, bh, 3); ctx.fill(); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = C.vwap; }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(vwapLab, bx + 5, yy);
   }
   for (const [y, lab, col] of refItems) {
     if (y < ymin || y > ymax) continue;
     let yy = Y(y);
     for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
     used.push(yy);
-    font(ctx, 9.5); const t = `${lab} ${fpx(y)}`; const tw = ctx.measureText(t).width + 10;
-    ctx.fillStyle = '#fff'; rrect(ctx, lx, yy - 8, tw, 16, 3); ctx.fill();
+    font(ctx, 9.5); const t = `${refShort(lab)} ${fpx(y)}`; const tw = ctx.measureText(t).width + 10;
+    const [bx, by, bw, bh] = leftBox(tw, yy, 16);
+    ctx.fillStyle = '#fff'; rrect(ctx, bx, by, bw, bh, 3); ctx.fill();
     ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();
-    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 5, yy);
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
   }
-  // spine + y ticks
+  // spine + y ticks (skip those covered by a left-gutter badge)
   ctx.strokeStyle = C.spine; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, fpH - 1);
   const st = tickStep(ymax - ymin);
   font(ctx, 10); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (let p = Math.ceil(ymin / st) * st; p <= ymax; p += st) {
-    ctx.fillText(fpx(p), L - 5, Y(p));
+    if (used.some(u => Math.abs(Y(p) - u) < 12)) {
+      ctx.beginPath(); ctx.moveTo(L - 3, Y(p)); ctx.lineTo(L, Y(p)); ctx.strokeStyle = C.text; ctx.stroke();
+      continue;
+    }
+    ctx.fillStyle = C.text; ctx.fillText(fpx(p), L - 5, Y(p));
     ctx.beginPath(); ctx.moveTo(L - 3, Y(p)); ctx.lineTo(L, Y(p)); ctx.strokeStyle = C.text; ctx.stroke();
   }
-  // clip notes (candles extending beyond shared window)
+  const colEl = cv.closest('.col');
+  if (colEl) {
+    const ch = colEl.querySelector('.ch'), sub = colEl.querySelector('.sub');
+    if (ch) ch.style.paddingLeft = L + 'px';
+    if (sub) sub.style.paddingLeft = L + 'px';
+  }
+  // clip notes (candles extending beyond shared window) — merge duplicates, stack if needed
+  const notes = [];
   bars.forEach((c, i) => {
     let t = null;
     if (c.h < ymin - 0.05) t = `↓ ${fpx(c.l)}–${fpx(c.h)}`;
     else if (c.l > ymax + 0.05) t = `↑ ${fpx(c.l)}–${fpx(c.h)}`;
     else if (c.l < ymin - 0.05) t = `↓ do ${fpx(c.l)}`;
     else if (c.h > ymax + 0.05) t = `↑ do ${fpx(c.h)}`;
-    if (!t) return;
+    if (t) notes.push({ i, t, c });
+  });
+  const merged = [];
+  for (const nt of notes) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.t === nt.t && nt.i === prev.iLast + 1) { prev.iLast = nt.i; continue; }
+    merged.push({ t: nt.t, iFirst: nt.i, iLast: nt.i, c: nt.c });
+  }
+  const laid = [];
+  merged.forEach(m => {
+    let t = m.t;
+    const cx = (X(m.iFirst) + X(m.iLast)) / 2;
     font(ctx, 9, true);
-    if (ctx.measureText(t).width + 8 > unit * 0.96) t = t[0] + ' ' + fpx(t[0] === '↓' ? c.l : c.h);
-    fitFont(ctx, t, unit * 0.96 - 8, 9, true); const tw = ctx.measureText(t).width + 8;
-    const cx = X(i), ty = T + fpH + 4;
-    ctx.fillStyle = '#f8fafc'; rrect(ctx, cx - tw / 2, ty, tw, 15, 3); ctx.fill();
+    const maxW = Math.max(unit * 0.96 * (m.iLast - m.iFirst + 1) - 6, 28);
+    if (ctx.measureText(t).width + 8 > maxW) t = t[0] + ' ' + fpx(t[0] === '↓' ? m.c.l : m.c.h);
+    fitFont(ctx, t, maxW - 8, 9, true);
+    const tw = ctx.measureText(t).width + 8;
+    let row = 0, ty = T + fpH + 4;
+    const left = cx - tw / 2, right = cx + tw / 2;
+    while (row < 3 && laid.some(p => p.row === row && left < p.right + 4 && right > p.left - 4)) {
+      row++; ty = T + fpH + 4 + row * 15;
+    }
+    laid.push({ left, right, row });
+    ctx.fillStyle = '#f8fafc'; rrect(ctx, left, ty, tw, 14, 3); ctx.fill();
     ctx.strokeStyle = '#64748b'; ctx.lineWidth = 0.6; ctx.stroke();
-    ctx.fillStyle = C.navy; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, cx, ty + 7.5);
+    ctx.fillStyle = C.navy; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, cx, ty + 7);
   });
   // cumulative delta panel
   const aT = T + fpH + gap;
@@ -421,7 +454,7 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const ast = niceStep((hi - lo) / 3);
   for (let v = Math.ceil(lo / ast) * ast; v <= hi; v += ast) ctx.fillText(fdel(v), L - 5, AY(v));
   ctx.save(); ctx.translate(10, aT + accH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillStyle = C.muted; ctx.fillText('Σ Δ', 0, 0); ctx.restore();
-  ctx.save(); ctx.translate(10, T + fpH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillStyle = C.muted; font(ctx, 9); ctx.fillText('cena (krok 1 pkt)', 0, 0); ctx.restore();
+  // axis title omitted — price / VWAP badges live in the left gutter
   // rows under each candle
   const rT = aT + accH + 8;
   bars.forEach((c, i) => {
@@ -444,7 +477,7 @@ function drawProfile(cv, bars, price, H, win, vwap) {
   const oMin = wp(bars[0].ms).min, oFull = oMin === 23 * 60;
   const oLab = oFull ? 'O od 23:00' : 'O od ' + fmtHM.format(new Date(bars[0].ms));
   const lo = Math.floor(Math.min(va.ps[0], dL)) - 1, hi = Math.ceil(Math.max(va.ps[va.ps.length - 1] + 1, dH)) + 1;
-  const L = 40, R = 6, T = 4, B = H - 4;
+  const L = 62, R = 6, T = 4, B = H - 4;
   const Y = p => T + (hi - p) / (hi - lo) * (B - T);
   const pw = W - L - R, maxV = Math.max(...va.vs);
   const CW = 84, HX = L + CW; // candle strip between axis and histogram
@@ -482,18 +515,38 @@ function drawProfile(cv, bars, price, H, win, vwap) {
   for (const [p, col] of [[va.vah + 1, C.nvah], [va.val, C.nvah]]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(W - R, Y(p)); ctx.stroke(); }
   ctx.strokeStyle = C.price; ctx.lineWidth = 1.3; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(L, Y(price)); ctx.lineTo(W - R, Y(price)); ctx.stroke(); ctx.setLineDash([]);
   lab(Y(va.vah + 1) - 7, 'VAH ' + fpx(va.vah), C.nvah); lab(Y(va.val) + 7, 'VAL ' + fpx(va.val), C.nvah);
-  lab(Y(va.poc + 0.5), 'POC ' + fpx(va.poc), '#8a6d00', true); lab(Y(price) - 8, fpx(price), C.price, true);
+  lab(Y(va.poc + 0.5), 'POC ' + fpx(va.poc), '#8a6d00', true);
+  const pUsed = [];
+  if (price != null && price >= lo && price <= hi) {
+    font(ctx, 10, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
+    const bx = Math.max(1, L - 2 - tw), yy = Y(price);
+    ctx.fillStyle = C.price; rrect(ctx, bx, yy - 9, tw, 18, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 6, yy);
+    pUsed.push(yy);
+  }
   if (vwap != null) {
     ctx.strokeStyle = C.vwap; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(L, Y(vwap)); ctx.lineTo(W - R, Y(vwap)); ctx.stroke();
-    const t = 'VWAP ' + fpx(Math.round(vwap * 10) / 10); font(ctx, 9.5, true); const tw = ctx.measureText(t).width + 10;
-    let yy = Y(vwap) + 9; if (Math.abs(yy - (Y(price) - 8)) < 14) yy = Y(vwap) + (Y(vwap) > Y(price) ? 16 : -16);
-    ctx.fillStyle = C.vwap; rrect(ctx, W - R - tw, yy - 7.5, tw, 15, 3); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - R - tw + 5, yy);
+    const t = 'V ' + fpx(Math.round(vwap * 10) / 10); font(ctx, 9.5, true); const tw = ctx.measureText(t).width + 10;
+    let yy = Y(vwap);
+    for (const u of pUsed) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
+    pUsed.push(yy);
+    const bx = Math.max(1, L - 2 - tw);
+    ctx.fillStyle = C.vwap; rrect(ctx, bx, yy - 8.5, tw, 17, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
   }
   ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, B - T - 1);
   const st = tickStep(hi - lo) * (hi - lo > 80 ? 2 : 1);
   font(ctx, 10); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  for (let p = Math.ceil(lo / st) * st; p <= hi; p += st) ctx.fillText(fpx(p), L - 5, Y(p));
+  for (let p = Math.ceil(lo / st) * st; p <= hi; p += st) {
+    if (pUsed.some(u => Math.abs(Y(p) - u) < 12)) continue;
+    ctx.fillText(fpx(p), L - 5, Y(p));
+  }
+  const pCol = cv.closest('.col');
+  if (pCol) {
+    const ch = pCol.querySelector('.ch'), sub = pCol.querySelector('.sub');
+    if (ch) ch.style.paddingLeft = '6px';
+    if (sub) sub.style.paddingLeft = '6px';
+  }
   return va;
 }
 
@@ -522,10 +575,23 @@ function windowEnd(all, tf) {
   for (let k = 0; k < all.length; k++) if (all[k].st <= p.endSt) i = k;
   return i < 0 ? 0 : i;
 }
-function visibleSlice(all, tf) {
+function canvasW(cv) {
+  return Math.max(240, (cv && cv.parentElement && cv.parentElement.clientWidth) || 240);
+}
+function fitN(W, L, R) {
+  const pw = Math.max(50, (W || 240) - (L || 62) - (R || 8));
+  const minCol = CANDLE_GUTTER + MIN_CELLS_W;
+  return Math.max(2, Math.min(NMAX, Math.floor(pw * 0.96 / minCol - 0.24)));
+}
+function nForTf(tf) {
+  const id = tf === 5 ? 'c5' : tf === 15 ? 'c15' : 'c60';
+  return fitN(canvasW($(id)));
+}
+function visibleSlice(all, tf, n) {
   const end = windowEnd(all, tf);
   if (end < 0) return [];
-  return all.slice(Math.max(0, end - N + 1), end + 1);
+  const k = n != null ? n : nForTf(tf);
+  return all.slice(Math.max(0, end - k + 1), end + 1);
 }
 function timeIsLive(all, tf) {
   const p = PAN[tf];
@@ -537,7 +603,7 @@ function isPanned(all, tf) {
 }
 function setTimeEnd(all, tf, endIdx) {
   if (!all.length) return;
-  const minEnd = Math.min(all.length, N) - 1;
+  const minEnd = Math.min(all.length, nForTf(tf)) - 1;
   const j = Math.max(minEnd, Math.min(all.length - 1, Math.round(endIdx)));
   PAN[tf].endSt = j >= all.length - 1 ? null : all[j].st;
 }
@@ -594,7 +660,8 @@ function paintFp(tf, yLock) {
   let [y0, y1] = yLock || yWin(tf, vis, VIEW.ymin, VIEW.ymax);
   const rowH = (y1 > y0) ? VIEW.fpH / (y1 - y0) : VIEW.rowH;
   drawFp($('c' + tf), all, tf, y0, y1, VIEW.price, VIEW.refItems, rowH, VIEW.vwap);
-  syncPanUi(tf, all, vis);
+  const visDrawn = (GEO['c' + tf] && GEO['c' + tf].bars) || vis;
+  syncPanUi(tf, all, visDrawn);
   drawCross();
 }
 $('grid').addEventListener('click', e => {
@@ -618,11 +685,12 @@ function ovCtx(id) {
   const ctx = ov.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, g.W, g.H);
   return [ctx, g];
 }
-function tag(ctx, x, y, t, align, bg, minX) {
+function tag(ctx, x, y, t, align, bg, minX, maxRight) {
   font(ctx, 10, true); const tw = ctx.measureText(t).width + 8;
   let bx = align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x;
   const cwCss = ctx.canvas.width / Math.max(1, window.devicePixelRatio || 1);
-  bx = Math.max(minX != null ? minX : 0, Math.min(bx, cwCss - tw - 1));
+  const hi = maxRight != null ? maxRight - tw : cwCss - tw - 1;
+  bx = Math.max(minX != null ? minX : 0, Math.min(bx, hi));
   ctx.fillStyle = bg || '#334155'; rrect(ctx, bx, y - 8, tw, 16, 3); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 4, y);
 }
@@ -637,7 +705,7 @@ function drawCross() {
       const yb = g.T + g.fpH;
       if (CROSS.price != null && CROSS.price >= g.ymin && CROSS.price <= g.ymax) {
         const y = Y(CROSS.price); dash(ctx, g.L, y, g.L + g.pw, y);
-        tag(ctx, g.L + g.pw + 3, y, fpx(Math.round(CROSS.price * 10) / 10), 'left', null, g.L + g.pw);
+        tag(ctx, g.L - 2, y, fpx(Math.round(CROSS.price * 10) / 10), 'right', null, 0, g.L);
       }
       if (src) {
         dash(ctx, CROSS.x, g.T, CROSS.x, g.aT + g.accH);
@@ -773,16 +841,16 @@ function render(data) {
   // shared Y: shorter visible timeframes (like Discord: all but the longest), + 2 pt pad, price ±3
   const visTf = Object.keys(TF).filter(k => VIS[k]).map(k => TF[k]);
   const basis = visTf.length > 1 ? visTf.slice(0, -1) : visTf.length ? visTf : [5, 15];
-  const vb = basis.flatMap(tf => series[tf].slice(-N));
+  const vb = basis.flatMap(tf => visibleSlice(series[tf], tf));
   let ymin = Math.floor(Math.min(...vb.map(c => c.l)) - 1e-9) - 2, ymax = Math.ceil(Math.max(...vb.map(c => c.h)) - 1e-9) + 2;
   ymin = Math.min(ymin, Math.floor(price - 3)); ymax = Math.max(ymax, Math.ceil(price + 3));
   // VWAP widens the window only when within 3 pt of it; otherwise ↑/↓ label
   if (vwap != null && vwap < ymin && vwap >= ymin - 3) ymin = Math.floor(vwap) - 1;
   if (vwap != null && vwap > ymax && vwap <= ymax + 3) ymax = Math.ceil(vwap) + 1;
-  const rowH = Math.max(13, Math.min(19, (window.innerHeight - 330) / (ymax - ymin)));
+  const rowH = Math.max(17, Math.min(24, (window.innerHeight - 280) / Math.max(8, ymax - ymin)));
   const refItems = refs(bars, data.session);
   const fpH = Math.round((ymax - ymin) * rowH);
-  let fpTotal = fpH + 4 + 26 + 70 + 76;
+  let fpTotal = fpH + 4 + 44 + 70 + 76;
   VIEW = { series, price, refItems, vwap, ymin, ymax, rowH, fpH, bars };
   document.body.dataset.pan5 = 'live'; document.body.dataset.pan15 = 'live'; document.body.dataset.pan60 = 'live';
   document.body.dataset.pany5 = 'auto'; document.body.dataset.pany15 = 'auto'; document.body.dataset.pany60 = 'auto';
@@ -793,11 +861,12 @@ function render(data) {
     const [y0, y1] = yWin(tf, vis, ymin, ymax);
     const rh = (y1 > y0) ? fpH / (y1 - y0) : rowH;
     drawFp($('c' + tf), series[tf], tf, y0, y1, price, refItems, rh, vwap);
-    syncPanUi(tf, series[tf], vis);
+    const visDrawn = (GEO['c' + tf] && GEO['c' + tf].bars) || vis;
+    syncPanUi(tf, series[tf], visDrawn);
   }
   let va = null;
   if (VIS.prof) {
-    va = drawProfile($('cProf'), bars, price, visTf.length ? fpTotal - 176 + 70 : Math.max(500, window.innerHeight - 260), visTf.length ? [ymin, ymax] : null, vwap);
+    va = drawProfile($('cProf'), bars, price, visTf.length ? fpTotal - 194 + 70 : Math.max(500, window.innerHeight - 260), visTf.length ? [ymin, ymax] : null, vwap);
     if (va) {
       const d = $('hProf');
       d.innerHTML = `<span class="tf">Profil sesji</span>`;
@@ -807,7 +876,7 @@ function render(data) {
   const nv = refItems.find(r => r[1] === 'nVAH'), onh = refItems.find(r => r[1] === 'ONH');
   const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
   $('foot').innerHTML =
-    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · domyślnie ostatnie ${N} świec na interwał (przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
+    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · tyle świec, ile się mieści czytelnie (komórka min. ~70 px; przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
     `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} w widoku na żywo (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓; po przesunięciu każdy interwał ma własne okno) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
     `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
