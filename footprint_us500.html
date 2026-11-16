@@ -365,7 +365,7 @@ function fillDays() { const ds = Object.keys(DATA).sort(); if (!DATA[S.day]) S.d
 function binLabels() { $('bin').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'auto') { const v = Number(b.dataset.v) * TK; b.textContent = (+v.toFixed(DEC + 1)) + (b.dataset.v === '1' ? ' pkt' : ''); } }); }
 async function setInst(name) {
   INST = name; [TK, DEC] = INSTS[name] || [1, 1]; $('inst').value = name;
-  if (!CACHE[name]) { $('sum').textContent = `Wczytywanie ${name}…`; try { const r = await fetch(`data/${name}.json`); CACHE[name] = await r.json(); } catch (e) { $('sum').textContent = `Nie udało się wczytać danych ${name}.`; return; } }
+  if (!CACHE[name]) { $('sum').textContent = `Wczytywanie ${name}…`; try { const r = await fetch(`data/${name}.json?t=${Date.now()}`, {cache: 'no-store'}); CACHE[name] = await r.json(); } catch (e) { $('sum').textContent = `Nie udało się wczytać danych ${name}.`; return; } }
   DATA = CACHE[name]; fillDays(); binLabels(); save(); render();
 }
 $('inst').onchange = e => { S.inst = e.target.value; S.sel = null; S.vwA = null; setInst(S.inst); };
@@ -2235,6 +2235,12 @@ async function djRender() {
 }
 if (!S.inst || !INSTS[S.inst]) S.inst = 'US500';   // domyślny rynek – bez tego okna z warunkiem „tylko US500” traktowały świeżą stronę jak inny rynek
 if (S.inst && S.inst !== 'US500' && INSTS[S.inst]) setInst(S.inst); else { binLabels(); render(); }
+// US500: dociągnij nowsze sesje z data/US500.json (dane wbudowane mogą być starsze)
+fetch('data/US500.json?t=' + Date.now(), {cache: 'no-store'}).then(r => r.json()).then(j => {
+  const B = CACHE.US500, wasLast = Object.keys(B).sort().pop(), nk = Object.keys(j).filter(k => !B[k]); if (!nk.length) return;
+  for (const k of Object.keys(j)) B[k] = j[k];
+  if (INST === 'US500') { const ds = Object.keys(B).sort(); if (!S.day || S.day === wasLast) S.day = ds[ds.length - 1]; DATA = B; fillDays(); save(); render(true); }
+}).catch(() => {});
 function tick() { const e = document.getElementById('clk'); if (e) e.textContent = new Date().toLocaleTimeString('pl-PL', {hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw'}); }
 tick(); setInterval(tick, 15000); addEventListener('online', () => render(true)); addEventListener('offline', () => render(true));
 $('wrap').addEventListener('scroll', () => { const g = document.getElementById('lvlab'); if (g) g.setAttribute('transform', `translate(${$('wrap').scrollLeft},0)`); }, {passive: true});
