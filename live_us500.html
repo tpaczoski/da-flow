@@ -87,7 +87,7 @@ const N = 6, STEP = 1, IMB = 3;
 const C = {
   navy:'#1b3a5f', green:'#1b7a4a', greenSoft:'#dcefe2', greenCell:'#b7e0c4',
   red:'#c0392b', redSoft:'#f6d6d3', redCell:'#f0b8b4', muted:'#6b7280', text:'#1a1d23',
-  poc:'#c9a227', ib:'#7c3aed', onh:'#7A4FA0', nvah:'#0e7490', price:'#1d4ed8',
+  poc:'#c9a227', vwap:'#9333ea', ib:'#7c3aed', onh:'#7A4FA0', nvah:'#0e7490', price:'#1d4ed8',
   spine:'#cbd5e1', grey:'#f4f5f7'
 };
 const FONT = '"DejaVu Sans",Verdana,"Segoe UI",system-ui,sans-serif';
@@ -132,19 +132,21 @@ function agg(bars, tf) {
     const w = wp(b.ms);
     const st = b.ms - (w.min % tf) * 60000;
     let x = g.get(st);
-    if (!x) { x = { st, tf, o: b.o, h: b.h, l: b.l, c: b.c, lv: new Map(), vol: 0, delta: 0 }; g.set(st, x); }
+    if (!x) { x = { st, tf, o: b.o, h: b.h, l: b.l, c: b.c, lv: new Map(), vol: 0, delta: 0, pv: 0 }; g.set(st, x); }
     x.h = Math.max(x.h, b.h); x.l = Math.min(x.l, b.l); x.c = b.c;
     for (const [p, bi, a] of b.lv) {
       const k = fbin(p);
       let z = x.lv.get(k); if (!z) { z = [0, 0]; x.lv.set(k, z); }
-      z[0] += bi; z[1] += a; x.vol += bi + a; x.delta += a - bi;
+      z[0] += bi; z[1] += a; x.vol += bi + a; x.delta += a - bi; x.pv += p * (bi + a);
     }
   }
   const out = [...g.values()].sort((a, b) => a.st - b.st);
   let acc = 0;
   const lastMs = bars.length ? bars[bars.length - 1].ms : 0;
+  let cpv = 0, cvol = 0; // session VWAP = Σ price·(bid+ask) / Σ (bid+ask), raw 0.5-pt levels, cumulative to candle close
   for (const x of out) {
     acc += x.delta; x.acc = acc;
+    cpv += x.pv; cvol += x.vol; x.vwap = cvol > 0 ? cpv / cvol : null;
     x.incomplete = x.st + tf * 60000 > lastMs + 60000;
     let poc = null, pv = -1;
     for (const [p, [bi, a]] of x.lv) { const v = bi + a; if (v > pv || (v === pv && -Math.abs(p) > -Math.abs(poc))) { pv = v; poc = p; } }
@@ -215,7 +217,7 @@ function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundR
 function niceStep(r) { const m = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, r)))); const f = r / m; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * m; }
 function tickStep(span) { return span > 40 ? 5 : span > 16 ? 2 : 1; }
 
-function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH) {
+function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const bars = all.slice(-N), n = bars.length;
   const L = 44, R = 6, T = 4;
   const fpH = Math.round((ymax - ymin) * rowH);
@@ -271,6 +273,16 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH) {
     ctx.strokeStyle = C.price; ctx.lineWidth = 1.3; ctx.setLineDash([2, 2]);
     ctx.beginPath(); ctx.moveTo(L, Y(price)); ctx.lineTo(L + pw, Y(price)); ctx.stroke();
   }
+  // VWAP stepping per candle close
+  ctx.setLineDash([]); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1.6; ctx.beginPath();
+  let started = false;
+  bars.forEach((c, i) => {
+    if (c.vwap == null) return;
+    const xa = X(i - 0.5), xb = i === n - 1 ? X(n - 0.05) : X(i + 0.5), yv = Y(c.vwap);
+    if (!started) { ctx.moveTo(xa, yv); started = true; } else ctx.lineTo(xa, yv);
+    ctx.lineTo(xb, yv);
+  });
+  ctx.stroke();
   ctx.setLineDash([]); ctx.restore();
   // labels on the right (ref lines + price)
   const used = [];
@@ -280,6 +292,19 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH) {
     ctx.fillStyle = C.price; rrect(ctx, lx, Y(price) - 9, tw, 18, 3); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 6, Y(price));
     used.push(Y(price));
+  }
+  if (vwap != null) {
+    font(ctx, 10, true);
+    const inR = vwap >= ymin && vwap <= ymax;
+    const t = inR ? 'VWAP ' + fpx(Math.round(vwap * 10) / 10) : `VWAP ${vwap > ymax ? '↑' : '↓'} ${fpx(Math.round(vwap * 10) / 10)}`;
+    const tw = ctx.measureText(t).width + 10;
+    let yy = inR ? Y(vwap) : (vwap > ymax ? T + 10 : T + fpH - 10);
+    for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
+    used.push(yy);
+    const bx = Math.min(lx, W - tw - 1);
+    if (inR) { ctx.fillStyle = C.vwap; rrect(ctx, bx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.fillStyle = '#fff'; }
+    else { ctx.fillStyle = '#fff'; rrect(ctx, bx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = C.vwap; }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
   }
   for (const [y, lab, col] of refItems) {
     if (y < ymin || y > ymax) continue;
@@ -351,7 +376,7 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH) {
   });
 }
 
-function drawProfile(cv, bars, price, H, win) {
+function drawProfile(cv, bars, price, H, win, vwap) {
   const vm = volMap(bars), va = va70(vm);
   if (!va) return null;
   const [ctx, W] = fit(cv, H);
@@ -364,7 +389,7 @@ function drawProfile(cv, bars, price, H, win) {
   const Y = p => T + (hi - p) / (hi - lo) * (B - T);
   const pw = W - L - R, maxV = Math.max(...va.vs);
   const CW = 84, HX = L + CW; // candle strip between axis and histogram
-  GEO[cv.id] = { type: 'prof', W, H, L, pw, T, B, lo, hi, vm, CW, ohlc: { o: dO, h: dH, l: dL, c: dC, lab: oLab } };
+  GEO[cv.id] = { type: 'prof', W, H, L, pw, T, B, lo, hi, vm, CW, ohlc: { o: dO, h: dH, l: dL, c: dC, lab: oLab }, vwap };
   ctx.fillStyle = 'rgba(29,78,216,.06)'; ctx.fillRect(L, Y(va.vah + 1), pw, Y(va.val) - Y(va.vah + 1));
   if (win) { ctx.fillStyle = 'rgba(201,162,39,.08)'; ctx.fillRect(L, Y(win[1]), pw, Y(win[0]) - Y(win[1])); }
   const rh = Math.max(1.5, (B - T) / (hi - lo) * 0.86);
@@ -399,6 +424,13 @@ function drawProfile(cv, bars, price, H, win) {
   ctx.strokeStyle = C.price; ctx.lineWidth = 1.3; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(L, Y(price)); ctx.lineTo(W - R, Y(price)); ctx.stroke(); ctx.setLineDash([]);
   lab(Y(va.vah + 1) - 7, 'VAH ' + fpx(va.vah), C.nvah); lab(Y(va.val) + 7, 'VAL ' + fpx(va.val), C.nvah);
   lab(Y(va.poc + 0.5), 'POC ' + fpx(va.poc), '#8a6d00', true); lab(Y(price) - 8, fpx(price), C.price, true);
+  if (vwap != null) {
+    ctx.strokeStyle = C.vwap; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(L, Y(vwap)); ctx.lineTo(W - R, Y(vwap)); ctx.stroke();
+    const t = 'VWAP ' + fpx(Math.round(vwap * 10) / 10); font(ctx, 9.5, true); const tw = ctx.measureText(t).width + 10;
+    let yy = Y(vwap) + 9; if (Math.abs(yy - (Y(price) - 8)) < 14) yy = Y(vwap) + (Y(vwap) > Y(price) ? 16 : -16);
+    ctx.fillStyle = C.vwap; rrect(ctx, W - R - tw, yy - 7.5, tw, 15, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - R - tw + 5, yy);
+  }
   ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, B - T - 1);
   const st = tickStep(hi - lo) * (hi - lo > 80 ? 2 : 1);
   font(ctx, 10); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -455,7 +487,7 @@ function drawCross() {
         const i = Math.round((CROSS.x - g.L) / g.unit - 0.55);
         if (i >= 0 && i < g.n) {
           const c = g.bars[i];
-          const lab = `${g.tf === 60 ? 'H1' : 'M' + g.tf} ${fmtHM.format(new Date(c.st))}${c.incomplete ? '·' : ''} · Δ ${fdel(c.delta)}`;
+          const lab = `${g.tf === 60 ? 'H1' : 'M' + g.tf} ${fmtHM.format(new Date(c.st))}${c.incomplete ? '·' : ''} · Δ ${fdel(c.delta)} · VWAP ${fpx(Math.round(c.vwap * 10) / 10)}`;
           tag(ctx, Math.min(Math.max(CROSS.x, g.L + 60), g.L + g.pw - 60), yb + 10, lab, 'center');
         }
         if (CROSS.acc != null) {
@@ -473,7 +505,7 @@ function drawCross() {
       }
       if (src) {
         dash(ctx, CROSS.x, g.T, CROSS.x, g.B);
-        if (CROSS.x < g.L + g.CW) { const o = g.ohlc; tag(ctx, g.L + 2, (CROSS.y > (g.T + g.B) / 2 ? g.T + 36 : g.B - 30), `O ${fpx(o.o)} H ${fpx(o.h)} L ${fpx(o.l)} C ${fpx(o.c)}`, 'left', o.c >= o.o ? C.green : C.red); }
+        if (CROSS.x < g.L + g.CW) { const o = g.ohlc; tag(ctx, g.L + 2, (CROSS.y > (g.T + g.B) / 2 ? g.T + 36 : g.B - 30), `O ${fpx(o.o)} H ${fpx(o.h)} L ${fpx(o.l)} C ${fpx(o.c)} · VWAP ${fpx(Math.round(g.vwap * 10) / 10)}`, 'left', o.c >= o.o ? C.green : C.red); }
       }
     }
   }
@@ -510,9 +542,11 @@ function render(data) {
   const TF = { m5: 5, m15: 15, h1: 60 };
   const series = { 5: agg(bars, 5), 15: agg(bars, 15), 60: agg(bars, 60) };
   const dayDelta = series[5].length ? series[5][series[5].length - 1].acc : 0;
+  const vwap = series[5].length ? series[5][series[5].length - 1].vwap : null;
   $('ttl').textContent = `Footprint wielu interwałów · US500 · ${fmtDate.format(new Date(last.ms))} ${fmtHM.format(new Date(last.ms))} PL`;
   meta.innerHTML = `Sesja <b>${data.session || '–'}</b> od <b>${fmtHM.format(new Date(bars[0].ms))}</b> do <b>${fmtHM.format(new Date(last.ms))} PL</b>` +
     ` <span class="mut">|</span> Cena <b id="price" style="color:${C.price}">${fpx(price)}</b>` +
+    ` <span class="mut">|</span> VWAP <b id="vwap" style="color:${C.vwap}">${fpx(Math.round(vwap * 10) / 10)}</b>` +
     ` <span class="mut">|</span> Delta dnia <b id="dayDelta" style="color:${sgnCol(dayDelta)}">${fdel(dayDelta)}</b>` +
     ` <span class="mut">|</span> Aktualizacja <b id="upd">${fmtHM.format(updated)} PL</b>`;
   if (ageMin > 15) { stale.hidden = false; stale.textContent = `Uwaga: dane starsze niż 15 min (ostatnia aktualizacja ${fmtHM.format(updated)} PL).`; document.body.dataset.stale = '1'; }
@@ -524,17 +558,20 @@ function render(data) {
   const vb = basis.flatMap(tf => series[tf].slice(-N));
   let ymin = Math.floor(Math.min(...vb.map(c => c.l)) - 1e-9) - 2, ymax = Math.ceil(Math.max(...vb.map(c => c.h)) - 1e-9) + 2;
   ymin = Math.min(ymin, Math.floor(price - 3)); ymax = Math.max(ymax, Math.ceil(price + 3));
+  // VWAP widens the window only when within 3 pt of it; otherwise ↑/↓ label
+  if (vwap != null && vwap < ymin && vwap >= ymin - 3) ymin = Math.floor(vwap) - 1;
+  if (vwap != null && vwap > ymax && vwap <= ymax + 3) ymax = Math.ceil(vwap) + 1;
   const rowH = Math.max(13, Math.min(19, (window.innerHeight - 330) / (ymax - ymin)));
   const refItems = refs(bars, data.session);
   let fpTotal = Math.round((ymax - ymin) * rowH) + 4 + 26 + 70 + 76;
   for (const [k, tf] of Object.entries(TF)) {
     if (!VIS[k]) continue;
     colHead($('h' + tf), tf, series[tf]);
-    drawFp($('c' + tf), series[tf], tf, ymin, ymax, price, refItems, rowH);
+    drawFp($('c' + tf), series[tf], tf, ymin, ymax, price, refItems, rowH, vwap);
   }
   let va = null;
   if (VIS.prof) {
-    va = drawProfile($('cProf'), bars, price, visTf.length ? fpTotal - 176 + 70 : Math.max(500, window.innerHeight - 260), visTf.length ? [ymin, ymax] : null);
+    va = drawProfile($('cProf'), bars, price, visTf.length ? fpTotal - 176 + 70 : Math.max(500, window.innerHeight - 260), visTf.length ? [ymin, ymax] : null, vwap);
     if (va) {
       const d = $('hProf');
       d.innerHTML = `<span class="tf">Profil sesji</span>`;
@@ -546,9 +583,9 @@ function render(data) {
   $('foot').innerHTML =
     `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · ostatnie ${N} świec na interwał, „·” = świeca w toku.<br>` +
     `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓) · ` +
-    `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
+    `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
-  Object.assign(document.body.dataset, { status: 'ok', price: String(price), delta: String(dayDelta), nbars: String(bars.length) });
+  Object.assign(document.body.dataset, { status: 'ok', price: String(price), vwap: String(vwap), delta: String(dayDelta), nbars: String(bars.length) });
   drawCross();
   if (va) Object.assign(document.body.dataset, { poc: String(va.poc), vah: String(va.vah), val: String(va.val) });
 }
