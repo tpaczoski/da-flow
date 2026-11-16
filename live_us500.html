@@ -43,9 +43,16 @@ html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);f
 .sub{color:var(--muted);font-size:10.5px;padding:2px 0 6px 44px}
 .prof .ch,.prof .sub{padding-left:6px}
 canvas{display:block;width:100%}
-.cv{position:relative;touch-action:pan-y}
+.cv{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.cv.fp{touch-action:none}
 .cv canvas.ov{position:absolute;left:0;top:0;pointer-events:none}
 .cv:hover{cursor:crosshair}
+.cv.fp.grabbing,.cv.fp.grabbing:hover{cursor:grabbing}
+.ch .view-hint{font:inherit;font-size:11.5px;font-weight:400;color:var(--navy);background:transparent;border:0;padding:0;cursor:pointer;white-space:nowrap}
+.ch .view-hint:hover,.ch .view-hint:focus-visible{text-decoration:underline;outline:none}
+.live-reset{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:999px;padding:4px 12px;cursor:pointer;white-space:nowrap}
+.live-reset:hover,.live-reset:focus-visible{background:var(--navy);color:#fff;outline:none}
+.live-reset[hidden]{display:none}
 .none{padding:30px 18px;color:var(--muted)}
 .foot{background:var(--foot);color:#334155;font-size:11px;line-height:1.7;padding:12px 18px;margin-top:10px}
 @media (max-width:980px){.cols{flex-direction:column}.col,.col.prof{width:100%;flex:none}.tog{margin-left:0}}
@@ -70,13 +77,14 @@ canvas{display:block;width:100%}
     <button data-k="h1" aria-pressed="true">H1</button>
     <button data-k="prof" aria-pressed="true">Profil sesji</button>
   </div>
+  <button type="button" class="live-reset" id="resetAll" hidden aria-label="Wróć do widoku na żywo">⟲ na żywo</button>
 </div>
 <div class="warn" id="stale" hidden></div>
 <div class="err" id="msg"></div>
 <div class="cols" id="grid" hidden>
-  <section class="col" data-k="m5"><div class="ch" id="h5"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c5"></canvas><canvas class="ov" id="o5"></canvas></div></section>
-  <section class="col" data-k="m15"><div class="ch" id="h15"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c15"></canvas><canvas class="ov" id="o15"></canvas></div></section>
-  <section class="col" data-k="h1"><div class="ch" id="h60"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c60"></canvas><canvas class="ov" id="o60"></canvas></div></section>
+  <section class="col" data-k="m5"><div class="ch" id="h5"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv fp" title="Przeciągnij: czas ↔, cena ↕. Kółko: cena, Shift+kółko: czas."><canvas id="c5"></canvas><canvas class="ov" id="o5"></canvas></div></section>
+  <section class="col" data-k="m15"><div class="ch" id="h15"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv fp" title="Przeciągnij: czas ↔, cena ↕. Kółko: cena, Shift+kółko: czas."><canvas id="c15"></canvas><canvas class="ov" id="o15"></canvas></div></section>
+  <section class="col" data-k="h1"><div class="ch" id="h60"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv fp" title="Przeciągnij: czas ↔, cena ↕. Kółko: cena, Shift+kółko: czas."><canvas id="c60"></canvas><canvas class="ov" id="o60"></canvas></div></section>
   <section class="col prof" data-k="prof"><div class="ch" id="hProf"></div><div class="sub" id="sProf">cała sesja · 70% VA · krok 1 pkt</div><div class="cv"><canvas id="cProf"></canvas><canvas class="ov" id="oProf"></canvas></div></section>
 </div>
 <div class="none" id="none" hidden>Wszystkie kolumny ukryte – włącz którąś przyciskiem „Pokaż”.</div>
@@ -218,7 +226,7 @@ function niceStep(r) { const m = Math.pow(10, Math.floor(Math.log10(Math.max(1e-
 function tickStep(span) { return span > 40 ? 5 : span > 16 ? 2 : 1; }
 
 function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
-  const bars = all.slice(-N), n = bars.length;
+  const bars = visibleSlice(all, tf), n = bars.length;
   const L = 44, R = 6, T = 4;
   const fpH = Math.round((ymax - ymin) * rowH);
   const gap = 26, accH = 70, rowsH = 76;
@@ -353,7 +361,7 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   let lo = Math.min(0, ...accs), hi = Math.max(0, ...accs);
   const pad = Math.max(20, (hi - lo) * 0.18); lo -= pad; hi += pad;
   const AY = v => aT + (hi - v) / (hi - lo) * accH;
-  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, xOff: 0.62, bars, tf };
+  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, xOff: 0.62, bars, all, tf };
   ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, aT + 0.5, pw - 1, accH - 1);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(L, AY(0)); ctx.lineTo(L + pw, AY(0)); ctx.stroke();
   if (n) {
@@ -456,7 +464,104 @@ function colHead(el, tf, all) {
 }
 
 let LAST = null;
+let VIEW = null;
 const GEO = {};
+// ---------- pan (time + price); default is live follow, not persisted ----------
+function blankPan() { return { endSt: null, yManual: false, ymin: 0, ymax: 0 }; }
+const PAN = { 5: blankPan(), 15: blankPan(), 60: blankPan() };
+function windowEnd(all, tf) {
+  if (!all.length) return -1;
+  const p = PAN[tf];
+  if (!p || p.endSt == null) return all.length - 1;
+  let i = -1;
+  for (let k = 0; k < all.length; k++) if (all[k].st <= p.endSt) i = k;
+  return i < 0 ? 0 : i;
+}
+function visibleSlice(all, tf) {
+  const end = windowEnd(all, tf);
+  if (end < 0) return [];
+  return all.slice(Math.max(0, end - N + 1), end + 1);
+}
+function timeIsLive(all, tf) {
+  const p = PAN[tf];
+  return !p || p.endSt == null || !all.length || p.endSt >= all[all.length - 1].st;
+}
+function isPanned(all, tf) {
+  const p = PAN[tf];
+  return !!(p && (p.yManual || !timeIsLive(all, tf)));
+}
+function setTimeEnd(all, tf, endIdx) {
+  if (!all.length) return;
+  const minEnd = Math.min(all.length, N) - 1;
+  const j = Math.max(minEnd, Math.min(all.length - 1, Math.round(endIdx)));
+  PAN[tf].endSt = j >= all.length - 1 ? null : all[j].st;
+}
+function clampY(ymin, ymax, all) {
+  const span = ymax - ymin;
+  if (!all.length || !(span > 0)) return [ymin, ymax];
+  const lo = Math.min(...all.map(c => c.l)) - 8, hi = Math.max(...all.map(c => c.h)) + 8;
+  if (ymin > hi) return [hi, hi + span];
+  if (ymax < lo) return [lo - span, lo];
+  return [ymin, ymax];
+}
+function setYShift(tf, ymin, ymax, all) {
+  PAN[tf].yManual = true;
+  [PAN[tf].ymin, PAN[tf].ymax] = clampY(ymin, ymax, all);
+}
+function yWin(tf, vis, liveLo, liveHi) {
+  const p = PAN[tf];
+  if (p.yManual) return [p.ymin, p.ymax];
+  if (p.endSt != null && vis.length) {
+    return [Math.floor(Math.min(...vis.map(c => c.l)) - 1e-9) - 2, Math.ceil(Math.max(...vis.map(c => c.h)) - 1e-9) + 2];
+  }
+  return [liveLo, liveHi];
+}
+function resetPan(tf) { PAN[tf] = blankPan(); }
+function anyPanned() {
+  if (!VIEW) return false;
+  return [5, 15, 60].some(tf => VIEW.series[tf] && isPanned(VIEW.series[tf], tf));
+}
+function syncPanUi(tf, all, vis) {
+  const el = $('h' + tf); if (!el) return;
+  const panned = isPanned(all, tf);
+  let hint = el.querySelector('.view-hint');
+  if (panned && vis && vis.length) {
+    const t = 'widok ' + fmtHM.format(new Date(vis[0].st)) + '–' + fmtHM.format(new Date(vis[vis.length - 1].st)) + ' ⟲';
+    if (!hint) {
+      hint = document.createElement('button');
+      hint.type = 'button'; hint.className = 'view-hint'; hint.dataset.tf = String(tf);
+      hint.title = 'Wróć do widoku na żywo';
+      hint.setAttribute('aria-label', 'Wróć do widoku na żywo');
+      el.appendChild(hint);
+    }
+    hint.textContent = t;
+  } else if (hint) hint.remove();
+  const k = tf === 5 ? '5' : tf === 15 ? '15' : '60';
+  document.body.dataset['pan' + k] = timeIsLive(all, tf) ? 'live' : fmtHM.format(new Date(PAN[tf].endSt));
+  document.body.dataset['pany' + k] = PAN[tf].yManual ? 'manual' : 'auto';
+  const allBtn = $('resetAll');
+  if (allBtn) allBtn.hidden = !anyPanned();
+}
+function paintFp(tf, yLock) {
+  const key = { 5: 'm5', 15: 'm15', 60: 'h1' }[tf];
+  if (!VIEW || !VIS[key]) return;
+  const all = VIEW.series[tf], vis = visibleSlice(all, tf);
+  let [y0, y1] = yLock || yWin(tf, vis, VIEW.ymin, VIEW.ymax);
+  const rowH = (y1 > y0) ? VIEW.fpH / (y1 - y0) : VIEW.rowH;
+  drawFp($('c' + tf), all, tf, y0, y1, VIEW.price, VIEW.refItems, rowH, VIEW.vwap);
+  syncPanUi(tf, all, vis);
+  drawCross();
+}
+$('grid').addEventListener('click', e => {
+  const b = e.target.closest('.view-hint'); if (!b) return;
+  resetPan(+b.dataset.tf);
+  if (LAST) render(LAST);
+});
+$('resetAll').addEventListener('click', () => {
+  resetPan(5); resetPan(15); resetPan(60);
+  if (LAST) render(LAST);
+});
+
 // ---------- crosshair (mouse + touch via pointer events) ----------
 let CROSS = null;
 function ovCtx(id) {
@@ -530,11 +635,72 @@ function onPtr(e, id) {
   }
   drawCross();
 }
+let DRAG = null;
+const DRAG_MIN = 6;
+function onDown(e, id) {
+  if (e.button != null && e.button !== 0) return;
+  const g = GEO[id];
+  if (!g || g.type !== 'fp' || !VIEW) { onPtr(e, id); return; }
+  const el = e.currentTarget, rc = el.getBoundingClientRect();
+  const x = e.clientX - rc.left, y = e.clientY - rc.top;
+  if (x < g.L || x > g.L + g.pw) { onPtr(e, id); return; }
+  const inPrice = y >= g.T && y <= g.T + g.fpH;
+  const inTime = y >= g.T && y <= g.aT + g.accH + 8;
+  if (!inPrice && !inTime) { onPtr(e, id); return; }
+  try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  DRAG = { id, tf: g.tf, x0: e.clientX, y0: e.clientY, end0: windowEnd(g.all, g.tf),
+    ymin: g.ymin, ymax: g.ymax, unit: g.unit, fpH: g.fpH,
+    allowX: inTime || inPrice, allowY: inPrice, moved: false };
+  onPtr(e, id);
+}
+function onMove(e, id) {
+  if (!DRAG || DRAG.id !== id) { onPtr(e, id); return; }
+  const dx = e.clientX - DRAG.x0, dy = e.clientY - DRAG.y0;
+  if (!DRAG.moved && Math.hypot(dx, dy) < DRAG_MIN) { onPtr(e, id); return; }
+  DRAG.moved = true;
+  CROSS = null;
+  const all = VIEW.series[DRAG.tf];
+  if (DRAG.allowX && Math.abs(dx) >= DRAG_MIN) setTimeEnd(all, DRAG.tf, DRAG.end0 - dx / DRAG.unit);
+  if (DRAG.allowY && Math.abs(dy) >= DRAG_MIN) {
+    const span = DRAG.ymax - DRAG.ymin;
+    const shift = dy / DRAG.fpH * span;
+    setYShift(DRAG.tf, DRAG.ymin + shift, DRAG.ymax + shift, all);
+  }
+  e.currentTarget.classList.add('grabbing');
+  const yDrag = DRAG.allowY && Math.abs(dy) >= DRAG_MIN;
+  paintFp(DRAG.tf, (!PAN[DRAG.tf].yManual && !yDrag) ? [DRAG.ymin, DRAG.ymax] : null);
+}
+function onUp(e, id) {
+  if (!DRAG || DRAG.id !== id) return;
+  const el = e.currentTarget, moved = DRAG.moved;
+  try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+  el.classList.remove('grabbing');
+  DRAG = null;
+  if (moved && LAST) render(LAST);
+  else onPtr(e, id);
+}
+function onWheel(e, id) {
+  const g = GEO[id]; if (!g || g.type !== 'fp' || !VIEW) return;
+  e.preventDefault();
+  const all = VIEW.series[g.tf];
+  const timeMode = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+  const raw = timeMode && !e.shiftKey ? e.deltaX : e.deltaY;
+  if (timeMode) setTimeEnd(all, g.tf, windowEnd(all, g.tf) + (Math.sign(raw) || 1));
+  else {
+    const span = g.ymax - g.ymin;
+    const shift = -(raw / Math.max(1, g.fpH)) * span;
+    setYShift(g.tf, g.ymin + shift, g.ymax + shift, all);
+  }
+  if (LAST) render(LAST);
+}
 for (const id of ['c5', 'c15', 'c60', 'cProf']) {
   const w = $(id).parentElement;
-  w.addEventListener('pointermove', e => onPtr(e, id));
-  w.addEventListener('pointerdown', e => onPtr(e, id));
-  w.addEventListener('pointerleave', () => { CROSS = null; drawCross(); });
+  w.addEventListener('pointermove', e => onMove(e, id));
+  w.addEventListener('pointerdown', e => onDown(e, id));
+  w.addEventListener('pointerup', e => onUp(e, id));
+  w.addEventListener('pointercancel', e => onUp(e, id));
+  w.addEventListener('pointerleave', () => { if (!DRAG) { CROSS = null; drawCross(); } });
+  w.addEventListener('wheel', e => onWheel(e, id), { passive: false });
 }
 function render(data) {
   LAST = data;
@@ -569,11 +735,19 @@ function render(data) {
   if (vwap != null && vwap > ymax && vwap <= ymax + 3) ymax = Math.ceil(vwap) + 1;
   const rowH = Math.max(13, Math.min(19, (window.innerHeight - 330) / (ymax - ymin)));
   const refItems = refs(bars, data.session);
-  let fpTotal = Math.round((ymax - ymin) * rowH) + 4 + 26 + 70 + 76;
+  const fpH = Math.round((ymax - ymin) * rowH);
+  let fpTotal = fpH + 4 + 26 + 70 + 76;
+  VIEW = { series, price, refItems, vwap, ymin, ymax, rowH, fpH, bars };
+  document.body.dataset.pan5 = 'live'; document.body.dataset.pan15 = 'live'; document.body.dataset.pan60 = 'live';
+  document.body.dataset.pany5 = 'auto'; document.body.dataset.pany15 = 'auto'; document.body.dataset.pany60 = 'auto';
   for (const [k, tf] of Object.entries(TF)) {
     if (!VIS[k]) continue;
     colHead($('h' + tf), tf, series[tf]);
-    drawFp($('c' + tf), series[tf], tf, ymin, ymax, price, refItems, rowH, vwap);
+    const vis = visibleSlice(series[tf], tf);
+    const [y0, y1] = yWin(tf, vis, ymin, ymax);
+    const rh = (y1 > y0) ? fpH / (y1 - y0) : rowH;
+    drawFp($('c' + tf), series[tf], tf, y0, y1, price, refItems, rh, vwap);
+    syncPanUi(tf, series[tf], vis);
   }
   let va = null;
   if (VIS.prof) {
@@ -587,8 +761,8 @@ function render(data) {
   const nv = refItems.find(r => r[1] === 'nVAH'), onh = refItems.find(r => r[1] === 'ONH');
   const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
   $('foot').innerHTML =
-    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · ostatnie ${N} świec na interwał, „·” = świeca w toku.<br>` +
-    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
+    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · domyślnie ostatnie ${N} świec na interwał (przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
+    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} w widoku na żywo (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓; po przesunięciu każdy interwał ma własne okno) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
     `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
   Object.assign(document.body.dataset, { status: 'ok', price: String(price), vwap: String(vwap), delta: String(dayDelta), nbars: String(bars.length) });
