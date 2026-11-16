@@ -30,6 +30,12 @@ html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);f
 .tog button{font:inherit;font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:var(--muted);border-radius:999px;padding:4px 12px;cursor:pointer}
 .tog button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
 .tog button:focus-visible{outline:2px solid var(--price);outline-offset:2px}
+.uictl{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.uictl span{color:var(--muted);font-size:12px;margin:0 2px 0 8px}
+.uictl button{font:inherit;font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:var(--navy);border-radius:999px;padding:3px 9px;cursor:pointer;min-width:32px}
+.uictl button:hover,.uictl button:focus-visible{background:var(--navy);color:#fff;outline:none}
+.uictl #scaleLbl,.uictl #fontReset{min-width:36px;text-align:center;color:var(--navy);font-weight:700;font-size:12px}
+.uictl #scaleLbl{margin:0;cursor:pointer}
 .warn{background:#fff3d6;color:#8a5a00;border:1px solid #e0b04a;border-radius:8px;padding:8px 12px;margin:8px 18px 0;font-weight:700}
 .err{color:var(--red);font-weight:700;padding:14px 18px}
 #stale[hidden],#msg:empty,.col[hidden]{display:none}
@@ -76,6 +82,16 @@ canvas{display:block;width:100%}
     <button data-k="m15" aria-pressed="true">M15</button>
     <button data-k="h1" aria-pressed="true">H1</button>
     <button data-k="prof" aria-pressed="true">Profil sesji</button>
+  </div>
+  <div class="uictl" role="group" aria-label="Czcionka i skala">
+    <span>Czcionka</span>
+    <button type="button" id="fontMinus" title="Mniejsza czcionka">A−</button>
+    <button type="button" id="fontReset" title="Reset czcionki (100%)">A</button>
+    <button type="button" id="fontPlus" title="Większa czcionka">A+</button>
+    <span>Skala</span>
+    <button type="button" id="scaleMinus" title="Pomniejsz wykres">−</button>
+    <span id="scaleLbl" title="Reset skali (100%)">100%</span>
+    <button type="button" id="scalePlus" title="Powiększ wykres">+</button>
   </div>
   <button type="button" class="live-reset" id="resetAll" hidden aria-label="Wróć do widoku na żywo">⟲ na żywo</button>
 </div>
@@ -129,6 +145,31 @@ document.querySelectorAll('#tog button').forEach(b => b.onclick = () => {
   applyVis(); if (LAST) render(LAST);
 });
 applyVis();
+
+// ---------- font size & chart scale (localStorage) ----------
+const UI_KEY = 'live-us500-ui';
+let UI = { font: 1, scale: 1 };
+try {
+  const u = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+  if (u && isFinite(u.font)) UI.font = u.font;
+  if (u && isFinite(u.scale)) UI.scale = u.scale;
+} catch (e) {}
+function clampUI(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v * 20) / 20)); }
+function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) {} }
+function syncUI() {
+  const fl = $('fontReset'), sl = $('scaleLbl');
+  if (fl) fl.title = 'Reset czcionki (' + Math.round(UI.font * 100) + '%)';
+  if (sl) sl.textContent = Math.round(UI.scale * 100) + '%';
+}
+function setFont(v) { UI.font = clampUI(v, 0.7, 1.5); saveUI(); syncUI(); if (LAST) render(LAST); }
+function setScale(v) { UI.scale = clampUI(v, 0.5, 1.5); saveUI(); syncUI(); if (LAST) render(LAST); }
+$('fontMinus').onclick = () => setFont(UI.font - 0.1);
+$('fontPlus').onclick = () => setFont(UI.font + 0.1);
+$('fontReset').onclick = () => setFont(1);
+$('scaleMinus').onclick = () => setScale(UI.scale - 0.1);
+$('scalePlus').onclick = () => setScale(UI.scale + 0.1);
+$('scaleLbl').onclick = () => setScale(1);
+syncUI();
 
 // ---------- data ----------
 const fbin = p => Math.floor(p / STEP + 1e-9) * STEP;
@@ -279,17 +320,19 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   }
   const maxLabAt = px => { fontNum(ctx, px); let m = 0; for (const t of labels) m = Math.max(m, ctx.measureText(t).width); return m; };
   const halfW = gap => Math.max(3, (cellsW - gap) / 2 - 1);
-  let fs = Math.max(MIN_FONT, Math.min(11, rowH * 0.5));
+  const fontMul = UI.font || 1;
+  const minFs = Math.max(6, MIN_FONT * fontMul * 0.85);
+  let fs = Math.max(minFs, Math.min(12 * fontMul, rowH * 0.5 * fontMul));
   let mode = 'stack'; // 'hx' bid × ask, 'h' bid ask, 'stack' bid over ask
-  if (maxLabAt(MIN_FONT) <= halfW(6)) {
+  if (maxLabAt(minFs) <= halfW(6)) {
     mode = 'hx';
-    while (fs > MIN_FONT && maxLabAt(fs) > halfW(6)) fs -= 0.5;
-  } else if (maxLabAt(MIN_FONT) <= halfW(2)) {
+    while (fs > minFs && maxLabAt(fs) > halfW(6)) fs -= 0.5;
+  } else if (maxLabAt(minFs) <= halfW(2)) {
     mode = 'h';
-    while (fs > MIN_FONT && maxLabAt(fs) > halfW(2)) fs -= 0.5;
+    while (fs > minFs && maxLabAt(fs) > halfW(2)) fs -= 0.5;
   } else {
     mode = 'stack';
-    while (fs > MIN_FONT && maxLabAt(fs) > cellsW - 2) fs -= 0.5;
+    while (fs > minFs && maxLabAt(fs) > cellsW - 2) fs -= 0.5;
   }
   const midGap = mode === 'hx' ? 6 : 2;
   const fsX = Math.max(6, Math.min(fs - 1, 8));
@@ -620,13 +663,25 @@ function setYShift(tf, ymin, ymax, all) {
   PAN[tf].yManual = true;
   [PAN[tf].ymin, PAN[tf].ymax] = clampY(ymin, ymax, all);
 }
-function yWin(tf, vis, liveLo, liveHi) {
+function visYRange(vis, price) {
+  if (!vis || !vis.length) return null;
+  const ls = vis.map(c => c.l), hs = vis.map(c => c.h);
+  if (price != null && isFinite(price)) { ls.push(price); hs.push(price); }
+  return [Math.floor(Math.min(...ls) - 1e-9) - 2, Math.ceil(Math.max(...hs) - 1e-9) + 2];
+}
+function yWin(tf, vis, liveLo, liveHi, price) {
   const p = PAN[tf];
-  if (p.yManual) return [p.ymin, p.ymax];
-  if (p.endSt != null && vis.length) {
-    return [Math.floor(Math.min(...vis.map(c => c.l)) - 1e-9) - 2, Math.ceil(Math.max(...vis.map(c => c.h)) - 1e-9) + 2];
-  }
-  return [liveLo, liveHi];
+  if (p && p.yManual) return [p.ymin, p.ymax];
+  // auto-fit to every visible candle (live and after time-pan)
+  const r = visYRange(vis, price != null ? price : (VIEW && VIEW.price));
+  return r || [liveLo, liveHi];
+}
+function rowHeight(span) {
+  const base = 13 * (UI.scale || 1);
+  const maxH = Math.max(260, (window.innerHeight - 330));
+  let rh = base;
+  if (span > 0 && span * rh > maxH) rh = Math.max(9 * (UI.scale || 1), maxH / span);
+  return rh;
 }
 function resetPan(tf) { PAN[tf] = blankPan(); }
 function anyPanned() {
@@ -659,7 +714,7 @@ function paintFp(tf, yLock) {
   if (!VIEW || !VIS[key]) return;
   const all = VIEW.series[tf], vis = visibleSlice(all, tf);
   let [y0, y1] = yLock || yWin(tf, vis, VIEW.ymin, VIEW.ymax);
-  const rowH = (y1 > y0) ? VIEW.fpH / (y1 - y0) : VIEW.rowH;
+  const rowH = rowHeight(y1 - y0);
   drawFp($('c' + tf), all, tf, y0, y1, VIEW.price, VIEW.refItems, rowH, VIEW.vwap);
   const visDrawn = (GEO['c' + tf] && GEO['c' + tf].bars) || vis;
   syncPanUi(tf, all, visDrawn);
@@ -839,18 +894,20 @@ function render(data) {
   if (ageMin > 15) { stale.hidden = false; stale.textContent = `Uwaga: dane starsze niż 15 min (ostatnia aktualizacja ${fmtHM.format(updated)} PL).`; document.body.dataset.stale = '1'; }
   else { stale.hidden = true; stale.textContent = ''; document.body.dataset.stale = '0'; }
   grid.hidden = false;
-  // shared Y: shorter visible timeframes (like Discord: all but the longest), + 2 pt pad, price ±3
+  // each timeframe auto-fits Y to all its visible candles (so none are clipped)
   const visTf = Object.keys(TF).filter(k => VIS[k]).map(k => TF[k]);
-  const basis = visTf.length > 1 ? visTf.slice(0, -1) : visTf.length ? visTf : [5, 15];
-  const vb = basis.flatMap(tf => visibleSlice(series[tf], tf));
-  let ymin = Math.floor(Math.min(...vb.map(c => c.l)) - 1e-9) - 2, ymax = Math.ceil(Math.max(...vb.map(c => c.h)) - 1e-9) + 2;
-  ymin = Math.min(ymin, Math.floor(price - 3)); ymax = Math.max(ymax, Math.ceil(price + 3));
-  // VWAP widens the window only when within 3 pt of it; otherwise ↑/↓ label
-  if (vwap != null && vwap < ymin && vwap >= ymin - 3) ymin = Math.floor(vwap) - 1;
-  if (vwap != null && vwap > ymax && vwap <= ymax + 3) ymax = Math.ceil(vwap) + 1;
-  const rowH = Math.max(17, Math.min(24, (window.innerHeight - 280) / Math.max(8, ymax - ymin)));
   const refItems = refs(bars, data.session);
-  const fpH = Math.round((ymax - ymin) * rowH);
+  const yRanges = {};
+  let ymin = price - 4, ymax = price + 4, maxNat = 260;
+  for (const tf of visTf) {
+    const vis = visibleSlice(series[tf], tf);
+    const r = yWin(tf, vis, price - 4, price + 4, price);
+    yRanges[tf] = r;
+    ymin = Math.min(ymin, r[0]); ymax = Math.max(ymax, r[1]);
+    maxNat = Math.max(maxNat, (r[1] - r[0]) * rowHeight(r[1] - r[0]));
+  }
+  const fpH = Math.round(maxNat);
+  const rowH = rowHeight(Math.max(8, ymax - ymin));
   let fpTotal = fpH + 4 + 44 + 70 + 76;
   VIEW = { series, price, refItems, vwap, ymin, ymax, rowH, fpH, bars };
   document.body.dataset.pan5 = 'live'; document.body.dataset.pan15 = 'live'; document.body.dataset.pan60 = 'live';
@@ -859,8 +916,8 @@ function render(data) {
     if (!VIS[k]) continue;
     colHead($('h' + tf), tf, series[tf]);
     const vis = visibleSlice(series[tf], tf);
-    const [y0, y1] = yWin(tf, vis, ymin, ymax);
-    const rh = (y1 > y0) ? fpH / (y1 - y0) : rowH;
+    const [y0, y1] = yRanges[tf] || yWin(tf, vis, ymin, ymax, price);
+    const rh = rowHeight(y1 - y0);
     drawFp($('c' + tf), series[tf], tf, y0, y1, price, refItems, rh, vwap);
     const visDrawn = (GEO['c' + tf] && GEO['c' + tf].bars) || vis;
     syncPanUi(tf, series[tf], visDrawn);
@@ -878,7 +935,7 @@ function render(data) {
   const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
   $('foot').innerHTML =
     `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · domyślnie ostatnie 6 świec na interwał (przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
-    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} w widoku na żywo (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓; po przesunięciu każdy interwał ma własne okno) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
+    `Oś Y każdego interwału dopasowana do widocznych świec (${fpx(ymin)}–${fpx(ymax)} łącznie; przeciągnij ↕ żeby przesunąć, ⟲ na żywo wraca do auto) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
     `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
   Object.assign(document.body.dataset, { status: 'ok', price: String(price), vwap: String(vwap), delta: String(dayDelta), nbars: String(bars.length) });
