@@ -33,9 +33,9 @@ html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);f
 .warn{background:#fff3d6;color:#8a5a00;border:1px solid #e0b04a;border-radius:8px;padding:8px 12px;margin:8px 18px 0;font-weight:700}
 .err{color:var(--red);font-weight:700;padding:14px 18px}
 #stale[hidden],#msg:empty,.col[hidden]{display:none}
-.cols{display:flex;gap:26px;padding:14px 18px 6px;align-items:flex-start}
-.col{flex:3 1 0;min-width:0}
-.col.prof{flex:1.7 1 0}
+.cols{display:flex;gap:12px;padding:10px 12px 6px;align-items:flex-start}
+.col{flex:3.2 1 0;min-width:0}
+.col.prof{flex:1.15 1 0;min-width:110px;max-width:240px}
 .ch{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;padding-left:44px;min-height:22px}
 .ch .tf{font-size:18px;font-weight:700;color:var(--navy)}
 .ch .d{font-size:15px;font-weight:700}
@@ -91,8 +91,8 @@ canvas{display:block;width:100%}
 <div class="foot" id="foot">Ładowanie…</div>
 <script>
 const TZ = 'Europe/Warsaw';
-const NMAX = 8, STEP = 1, IMB = 3;
-const MIN_CELLS_W = 70, CANDLE_GUTTER = 11, MIN_FONT = 10;
+const N = 6, STEP = 1, IMB = 3;
+const CANDLE_GUTTER = 9, MIN_FONT = 8;
 const C = {
   navy:'#1b3a5f', green:'#1b7a4a', greenSoft:'#b6e8c5', greenCell:'#5fd48a',
   red:'#c0392b', redSoft:'#f5aea8', redCell:'#ef7a72', muted:'#6b7280', text:'#1a1d23',
@@ -100,6 +100,7 @@ const C = {
   spine:'#cbd5e1', grey:'#f4f5f7'
 };
 const FONT = '"DejaVu Sans",Verdana,"Segoe UI",system-ui,sans-serif';
+const FONT_NUM = '"DejaVu Sans Mono","Liberation Mono",Consolas,Menlo,monospace';
 const $ = id => document.getElementById(id);
 const fmtHM = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const fmtDate = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -221,6 +222,7 @@ function fit(cv, h) {
   return [ctx, w];
 }
 function font(ctx, px, bold) { ctx.font = (bold ? 'bold ' : '') + px + 'px ' + FONT; }
+function fontNum(ctx, px, bold) { ctx.font = (bold ? 'bold ' : '') + px + 'px ' + FONT_NUM; }
 function fitFont(ctx, t, maxW, px, bold) { font(ctx, px, bold); while (px > 6.5 && ctx.measureText(t).width > maxW) { px -= 0.5; font(ctx, px, bold); } }
 function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 function niceStep(r) { const m = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, r)))); const f = r / m; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * m; }
@@ -247,12 +249,11 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const L = Math.max(56, Math.min(78, Math.ceil(need + 4)));
   const R = 8;
   const pw = W - L - R;
-  const nFit = fitN(W, L, R);
-  const bars = visibleSlice(all, tf, nFit);
+  const bars = visibleSlice(all, tf);
   const n = bars.length;
   const xOff = 0.60;
-  const X = u => L + (u + xOff) / (n + 0.24) * pw;
-  const unit = pw / (n + 0.24);
+  const X = u => L + (u + xOff) / (n + 0.18) * pw;
+  const unit = pw / (n + 0.18);
   const Y = p => T + (ymax - p) / (ymax - ymin) * fpH;
   const colW = unit * 0.96;
   // narrow reserved candle gutter left of bid×ask
@@ -264,24 +265,34 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     ctx.strokeStyle = p % 5 === 0 ? '#eef1f4' : '#f7f8fa'; ctx.lineWidth = p % 5 === 0 ? 0.8 : 0.5;
     ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(L + pw, Y(p)); ctx.stroke();
   }
-  const fcell = v => (v == null ? '—' : String(Math.round(v)));
-  const midGap = Math.max(7, Math.min(10, cellsW * 0.14));
-  const padX = 1.5;
-  const numMaxW = Math.max(4, (cellsW - midGap) / 2 - padX);
-  let fs = Math.max(MIN_FONT, Math.min(12, rowH * 0.62));
+  const fcell = v => {
+    if (v == null) return '—';
+    const n = Math.round(v), a = Math.abs(n);
+    if (a >= 10000) return Math.round(n / 1000) + 'k';
+    if (a >= 1000) return (n / 1000).toFixed(1).replace('.', ',') + 'k';
+    return String(n);
+  };
   const labels = [];
   for (const c of bars) for (const [p, [bi, a]] of c.lv) {
     if (p < ymin || p > ymax - 1e-9) continue;
     labels.push(fcell(bi), fcell(a));
   }
-  font(ctx, fs);
-  let maxLab = 0;
-  for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
-  while (fs > MIN_FONT && maxLab > numMaxW) {
-    fs -= 0.5; font(ctx, fs); maxLab = 0;
-    for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
+  const maxLabAt = px => { fontNum(ctx, px); let m = 0; for (const t of labels) m = Math.max(m, ctx.measureText(t).width); return m; };
+  const halfW = gap => Math.max(3, (cellsW - gap) / 2 - 1);
+  let fs = Math.max(MIN_FONT, Math.min(11, rowH * 0.5));
+  let mode = 'stack'; // 'hx' bid × ask, 'h' bid ask, 'stack' bid over ask
+  if (maxLabAt(MIN_FONT) <= halfW(6)) {
+    mode = 'hx';
+    while (fs > MIN_FONT && maxLabAt(fs) > halfW(6)) fs -= 0.5;
+  } else if (maxLabAt(MIN_FONT) <= halfW(2)) {
+    mode = 'h';
+    while (fs > MIN_FONT && maxLabAt(fs) > halfW(2)) fs -= 0.5;
+  } else {
+    mode = 'stack';
+    while (fs > MIN_FONT && maxLabAt(fs) > cellsW - 2) fs -= 0.5;
   }
-  const fsX = Math.max(8, Math.min(fs - 1, midGap - 1));
+  const midGap = mode === 'hx' ? 6 : 2;
+  const fsX = Math.max(6, Math.min(fs - 1, 8));
   bars.forEach((c, i) => {
     const x0 = X(i - 0.48), cellsX = x0 + gutter;
     ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, colW, fpH);
@@ -301,8 +312,6 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     ctx.strokeStyle = c.c >= c.o ? '#146338' : '#9b2c22'; ctx.lineWidth = 0.8;
     ctx.strokeRect(cx - bodyW / 2 + 0.4, yTopB + 0.4, bodyW - 0.8, yBotB - yTopB - 0.8);
     const midX = cellsX + cellsW / 2;
-    const bidRight = midX - midGap / 2;
-    const askLeft = midX + midGap / 2;
     for (const [p, [bi, a]] of c.lv) {
       if (p < ymin || p > ymax - 1e-9) continue;
       const yTop = Y(p + 0.48), hh = rowH * 0.96, yc = Y(p);
@@ -313,17 +322,22 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
       ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(cellsX, yTop, cellsW / 2, hh);
       ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(cellsX + cellsW / 2, yTop, cellsW / 2, hh);
       ctx.globalAlpha = 1;
+      const tb = fcell(bi), ta = fcell(a);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(cellsX, yTop, Math.max(0, cellsW), hh); ctx.clip();
       ctx.textBaseline = 'middle';
-      ctx.save();
-      ctx.beginPath(); ctx.rect(cellsX, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
-      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
-      ctx.textAlign = 'right'; ctx.fillText(fcell(bi), bidRight, yc);
-      ctx.restore();
-      font(ctx, fsX); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('×', midX, yc);
-      ctx.save();
-      ctx.beginPath(); ctx.rect(cellsX + cellsW / 2, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
-      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
-      ctx.textAlign = 'left'; ctx.fillText(fcell(a), askLeft, yc);
+      if (mode === 'stack') {
+        fontNum(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
+        ctx.textAlign = 'center'; ctx.fillText(tb, midX, yc - fs * 0.55);
+        fontNum(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
+        ctx.fillText(ta, midX, yc + fs * 0.55);
+      } else {
+        fontNum(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
+        ctx.textAlign = 'right'; ctx.fillText(tb, midX - midGap / 2, yc);
+        if (mode === 'hx') { fontNum(ctx, fsX); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('×', midX, yc); }
+        fontNum(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
+        ctx.textAlign = 'left'; ctx.fillText(ta, midX + midGap / 2, yc);
+      }
       ctx.restore();
       if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(cellsX + 1, yTop + 1, cellsW - 2, hh - 2); }
     }
@@ -575,23 +589,10 @@ function windowEnd(all, tf) {
   for (let k = 0; k < all.length; k++) if (all[k].st <= p.endSt) i = k;
   return i < 0 ? 0 : i;
 }
-function canvasW(cv) {
-  return Math.max(240, (cv && cv.parentElement && cv.parentElement.clientWidth) || 240);
-}
-function fitN(W, L, R) {
-  const pw = Math.max(50, (W || 240) - (L || 62) - (R || 8));
-  const minCol = CANDLE_GUTTER + MIN_CELLS_W;
-  return Math.max(2, Math.min(NMAX, Math.floor(pw * 0.96 / minCol - 0.24)));
-}
-function nForTf(tf) {
-  const id = tf === 5 ? 'c5' : tf === 15 ? 'c15' : 'c60';
-  return fitN(canvasW($(id)));
-}
-function visibleSlice(all, tf, n) {
+function visibleSlice(all, tf) {
   const end = windowEnd(all, tf);
   if (end < 0) return [];
-  const k = n != null ? n : nForTf(tf);
-  return all.slice(Math.max(0, end - k + 1), end + 1);
+  return all.slice(Math.max(0, end - N + 1), end + 1);
 }
 function timeIsLive(all, tf) {
   const p = PAN[tf];
@@ -603,7 +604,7 @@ function isPanned(all, tf) {
 }
 function setTimeEnd(all, tf, endIdx) {
   if (!all.length) return;
-  const minEnd = Math.min(all.length, nForTf(tf)) - 1;
+  const minEnd = Math.min(all.length, N) - 1;
   const j = Math.max(minEnd, Math.min(all.length - 1, Math.round(endIdx)));
   PAN[tf].endSt = j >= all.length - 1 ? null : all[j].st;
 }
@@ -876,7 +877,7 @@ function render(data) {
   const nv = refItems.find(r => r[1] === 'nVAH'), onh = refItems.find(r => r[1] === 'ONH');
   const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
   $('foot').innerHTML =
-    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · tyle świec, ile się mieści czytelnie (komórka min. ~70 px; przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
+    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · domyślnie ostatnie 6 świec na interwał (przeciągnij wykres ↔ żeby cofnąć się w sesji, ↕ żeby przesunąć cenę; kółko = cena, Shift+kółko = czas; ⟲ na żywo wraca do bieżących świec i śledzenia). „·” = świeca w toku.<br>` +
     `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} w widoku na żywo (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓; po przesunięciu każdy interwał ma własne okno) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
     `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
