@@ -225,20 +225,33 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const H = T + fpH + gap + accH + rowsH;
   const [ctx, W] = fit(cv, H);
   const pw = W - L - R;
-  const X = u => L + (u + 0.55) / (n + 1.6) * pw;
-  const unit = pw / (n + 1.6);
+  const X = u => L + (u + 0.62) / (n + 1.15) * pw;
+  const unit = pw / (n + 1.15);
   const Y = p => T + (ymax - p) / (ymax - ymin) * fpH;
+  const colW = unit * 0.96;
+  const strip = Math.max(13, Math.min(18, Math.round(unit * 0.28)));
+  const cellsW = colW - strip;
   // frame + grid
   ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, fpH); ctx.clip();
   for (let p = Math.floor(ymin); p <= Math.ceil(ymax); p += STEP) {
     ctx.strokeStyle = p % 5 === 0 ? '#eef1f4' : '#f7f8fa'; ctx.lineWidth = p % 5 === 0 ? 0.8 : 0.5;
     ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(L + pw, Y(p)); ctx.stroke();
   }
-  const fs = Math.max(7.5, Math.min(11, Math.min(rowH * 0.72, unit * 0.88 / 6.2)));
+  const fs = Math.max(7, Math.min(11, Math.min(rowH * 0.72, cellsW / 6.2)));
   bars.forEach((c, i) => {
-    const x0 = X(i - 0.46), cw = unit * 0.88;
-    ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, cw, fpH);
-    ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 0.6; ctx.strokeRect(x0, T, cw, fpH);
+    const x0 = X(i - 0.48), cellsX = x0 + strip;
+    ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, colW, fpH);
+    ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 0.6; ctx.strokeRect(x0, T, colW, fpH);
+    ctx.strokeStyle = '#e8eaed'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(cellsX, T); ctx.lineTo(cellsX, T + fpH); ctx.stroke();
+    // OHLC candle immediately left of bid×ask, same price axis (replaces the old thin right-edge wick)
+    const cx = x0 + strip / 2, bodyW = Math.max(7, Math.min(12, strip - 5));
+    const ccol = c.c >= c.o ? C.green : C.red;
+    ctx.strokeStyle = ccol; ctx.lineWidth = 1.45;
+    ctx.beginPath(); ctx.moveTo(cx, Y(c.h)); ctx.lineTo(cx, Y(c.l)); ctx.stroke();
+    let yTopB = Y(Math.max(c.o, c.c)), yBotB = Y(Math.min(c.o, c.c));
+    if (yBotB - yTopB < 2) { const mid = (yTopB + yBotB) / 2; yTopB = mid - 1; yBotB = mid + 1; }
+    ctx.fillStyle = ccol; ctx.fillRect(cx - bodyW / 2, yTopB, bodyW, yBotB - yTopB);
     for (const [p, [bi, a]] of c.lv) {
       if (p < ymin || p > ymax - 1e-9) continue;
       const yTop = Y(p + 0.48), hh = rowH * 0.96, yc = Y(p);
@@ -246,23 +259,15 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
       const fl = c.flags.get(p);
       const sell = fl === 'sell' || fl === 'both', buy = fl === 'buy' || fl === 'both';
       ctx.globalAlpha = 0.40 + 0.50 * intens;
-      ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(x0, yTop, cw / 2, hh);
-      ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(x0 + cw / 2, yTop, cw / 2, hh);
+      ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(cellsX, yTop, cellsW / 2, hh);
+      ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(cellsX + cellsW / 2, yTop, cellsW / 2, hh);
       ctx.globalAlpha = 1;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text; ctx.fillText(fint(bi), x0 + cw * 0.23, yc);
-      font(ctx, Math.max(6, fs - 1.5)); ctx.fillStyle = '#64748b'; ctx.fillText('×', x0 + cw * 0.5, yc);
-      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text; ctx.fillText(fint(a), x0 + cw * 0.77, yc);
-      if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(x0 + 1, yTop + 1, cw - 2, hh - 2); }
+      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text; ctx.fillText(fint(bi), cellsX + cellsW * 0.23, yc);
+      font(ctx, Math.max(6, fs - 1.5)); ctx.fillStyle = '#64748b'; ctx.fillText('×', cellsX + cellsW * 0.5, yc);
+      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text; ctx.fillText(fint(a), cellsX + cellsW * 0.77, yc);
+      if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(cellsX + 1, yTop + 1, cellsW - 2, hh - 2); }
     }
-    // wick + thin body at the right edge
-    const xw = X(i + 0.46);
-    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(xw, Y(c.h)); ctx.lineTo(xw, Y(c.l)); ctx.stroke();
-    let y1 = Math.min(c.o, c.c), y2 = Math.max(c.o, c.c);
-    if (y2 - y1 < 0.15) { y1 -= 0.12; y2 += 0.12; }
-    ctx.fillStyle = c.c >= c.o ? C.green : C.red;
-    ctx.fillRect(X(i + 0.42), Y(y2), Math.max(3, unit * 0.09), Math.max(2, Y(y1) - Y(y2)));
   });
   for (const [y, , col] of refItems) {
     if (y < ymin || y > ymax) continue;
@@ -289,8 +294,9 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const lx = X(n - 0.05) + 4;
   if (price != null && price >= ymin && price <= ymax) {
     font(ctx, 10.5, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
-    ctx.fillStyle = C.price; rrect(ctx, lx, Y(price) - 9, tw, 18, 3); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 6, Y(price));
+    const px = Math.min(lx, W - tw - 1);
+    ctx.fillStyle = C.price; rrect(ctx, px, Y(price) - 9, tw, 18, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, px + 6, Y(price));
     used.push(Y(price));
   }
   if (vwap != null) {
@@ -347,7 +353,7 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   let lo = Math.min(0, ...accs), hi = Math.max(0, ...accs);
   const pad = Math.max(20, (hi - lo) * 0.18); lo -= pad; hi += pad;
   const AY = v => aT + (hi - v) / (hi - lo) * accH;
-  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, bars, tf };
+  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, xOff: 0.62, bars, tf };
   ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, aT + 0.5, pw - 1, accH - 1);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(L, AY(0)); ctx.lineTo(L + pw, AY(0)); ctx.stroke();
   if (n) {
@@ -484,7 +490,7 @@ function drawCross() {
       }
       if (src) {
         dash(ctx, CROSS.x, g.T, CROSS.x, g.aT + g.accH);
-        const i = Math.round((CROSS.x - g.L) / g.unit - 0.55);
+        const i = Math.round((CROSS.x - g.L) / g.unit - (g.xOff ?? 0.55));
         if (i >= 0 && i < g.n) {
           const c = g.bars[i];
           const lab = `${g.tf === 60 ? 'H1' : 'M' + g.tf} ${fmtHM.format(new Date(c.st))}${c.incomplete ? '·' : ''} · Δ ${fdel(c.delta)} · VWAP ${fpx(Math.round(c.vwap * 10) / 10)}`;
@@ -582,7 +588,7 @@ function render(data) {
   const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
   $('foot').innerHTML =
     `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · ostatnie ${N} świec na interwał, „·” = świeca w toku.<br>` +
-    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓) · ` +
+    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓) · świeca OHLC z lewej strony każdej kolumny (ciało open–close, knot high–low, zielona wzrost / czerwona spadek) · ` +
     `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · VWAP sesji ${fpx(Math.round(vwap * 10) / 10)} (fioletowa linia; Σ cena·(bid+ask)/Σ(bid+ask) od początku sesji, w kolumnach schodkowo na zamknięcie świecy) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
     `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
   Object.assign(document.body.dataset, { status: 'ok', price: String(price), vwap: String(vwap), delta: String(dayDelta), nbars: String(bars.length) });
