@@ -3,372 +3,542 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>US500 na żywo – DA Flow</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<title>US500 na żywo – Footprint wielu interwałów – DA Flow</title>
 <style>
 :root{
-  --bg:#f3f4f2; --panel:#ffffff; --ink:#1c2321; --mut:#66706c; --line:#dfe3e0;
-  --buy:#1f7a4d; --sell:#c0392b; --va:#b07d12; --poc:#1d4f91;
-  --cellbg:#ffffff; --bar:#8b958f;
-  --f-ui:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
-  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
-  --plot-bg:#f3f4f2; --plot-panel:#ffffff; --wick:#8b958f; --va-fill:rgba(29,79,145,.08);
-  --px:#1c2321; --outside:#c5cdc8;
-}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#121615; --panel:#1a201e; --ink:#e3e8e5; --mut:#94a09b; --line:#2b3431;
-  --buy:#4cc38a; --sell:#ef6b5b; --va:#e0b04a; --poc:#6ea8f0;
-  --cellbg:#1a201e; --bar:#7d8984; color-scheme:dark;
-  --plot-bg:#121615; --plot-panel:#10151d; --wick:#555f73; --va-fill:rgba(74,120,184,.14);
-  --px:#ffffff; --outside:#33405a;
-}}
-:root[data-theme="dark"]{
-  --bg:#121615; --panel:#1a201e; --ink:#e3e8e5; --mut:#94a09b; --line:#2b3431;
-  --buy:#4cc38a; --sell:#ef6b5b; --va:#e0b04a; --poc:#6ea8f0;
-  --cellbg:#1a201e; --bar:#7d8984; color-scheme:dark;
-  --plot-bg:#121615; --plot-panel:#10151d; --wick:#555f73; --va-fill:rgba(74,120,184,.14);
-  --px:#ffffff; --outside:#33405a;
+  --navy:#1b3a5f; --navy2:#2c5282; --green:#1b7a4a; --red:#c0392b; --muted:#6b7280;
+  --text:#1a1d23; --line:#e6e8ec; --bg:#ffffff; --foot:#f3f4f6; --price:#1d4ed8;
+  --f:"DejaVu Sans",Verdana,"Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;min-height:100%}
-body{padding:16px 16px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:12px}
-h1{font-size:22px;font-weight:600;margin:0;letter-spacing:.01em}
-.ver{font:700 11px ui-monospace,monospace;color:var(--poc);border:1px solid currentColor;border-radius:4px;padding:1px 6px;vertical-align:4px;margin-left:4px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.seg button,.topnav a{font:inherit;font-size:13px;background:transparent;color:var(--ink);border:0;padding:5px 12px;cursor:pointer;display:inline-block;text-decoration:none}
-.seg button[aria-pressed="true"],.topnav a[aria-current="page"]{background:var(--ink);color:var(--bg);font-weight:600}
-.meta{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;margin:0 0 10px;font-size:14px}
-.meta b{font-family:var(--f-num);font-weight:700}
-.meta .mut{color:var(--mut);font-weight:400}
-.warn{background:#4a3416;color:#f0a04b;border:1px solid #f0a04b;border-radius:8px;padding:8px 12px;margin:0 0 12px;font-weight:600}
-:root:not([data-theme="dark"]):not(:not([data-theme="light"])) .warn{background:#fff3d6;color:#8a5a00;border-color:#e0b04a}
-@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .warn{background:#fff3d6;color:#8a5a00;border-color:#e0b04a}}
-:root[data-theme="light"] .warn{background:#fff3d6;color:#8a5a00;border-color:#e0b04a}
-.err{color:var(--sell);font-weight:600;padding:20px 0}
-.grid{display:grid;grid-template-columns:minmax(160px,1.1fr) minmax(0,2.4fr) minmax(0,1.4fr) minmax(0,1fr);gap:8px;height:calc(100vh - 150px);min-height:520px}
-@media (max-width:1100px){.grid{grid-template-columns:1fr;height:auto}.panel{min-height:360px}}
-.panel{background:var(--plot-panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
-.ptitle{flex:0 0 auto;padding:8px 10px 4px;font-weight:600;font-size:13px;color:var(--ink)}
-.ptitle span{color:var(--mut);font-weight:500;font-size:12px}
-.pview{flex:1 1 auto;overflow:auto;position:relative;min-height:0}
-canvas{display:block}
-.foot{margin-top:10px;color:var(--mut);font-size:12px}
-#stale[hidden],#msg:empty{display:none}
-#msg.err{display:block}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);font-size:13px}
+.top{background:var(--navy);color:#fff;display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;padding:12px 18px}
+.brand{font-weight:700;font-size:17px;letter-spacing:.01em}
+.brand small{font-weight:400;font-size:11px;opacity:.7;margin-left:4px}
+.ttl{font-size:16px}
+.top nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.top nav a{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.35);border-radius:6px;padding:4px 10px;font-size:12px}
+.top nav a[aria-current="page"]{background:#fff;color:var(--navy);font-weight:700}
+.badge{background:#d97706;color:#fff;font-weight:700;font-size:11px;border-radius:7px;padding:7px 14px;letter-spacing:.04em}
+.bar2{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 18px 4px}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.meta b{font-weight:700}
+.meta .mut{color:var(--muted)}
+.tog{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.tog span{color:var(--muted);font-size:12px;margin-right:2px}
+.tog button{font:inherit;font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:var(--muted);border-radius:999px;padding:4px 12px;cursor:pointer}
+.tog button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.tog button:focus-visible{outline:2px solid var(--price);outline-offset:2px}
+.warn{background:#fff3d6;color:#8a5a00;border:1px solid #e0b04a;border-radius:8px;padding:8px 12px;margin:8px 18px 0;font-weight:700}
+.err{color:var(--red);font-weight:700;padding:14px 18px}
+#stale[hidden],#msg:empty,.col[hidden]{display:none}
+.cols{display:flex;gap:26px;padding:14px 18px 6px;align-items:flex-start}
+.col{flex:3 1 0;min-width:0}
+.col.prof{flex:1.25 1 0}
+.ch{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;padding-left:44px;min-height:22px}
+.ch .tf{font-size:18px;font-weight:700;color:var(--navy)}
+.ch .d{font-size:15px;font-weight:700}
+.ch .v{font-size:13px}
+.sub{color:var(--muted);font-size:10.5px;padding:2px 0 6px 44px}
+.prof .ch,.prof .sub{padding-left:6px}
+canvas{display:block;width:100%}
+.cv{position:relative;touch-action:pan-y}
+.cv canvas.ov{position:absolute;left:0;top:0;pointer-events:none}
+.cv:hover{cursor:crosshair}
+.none{padding:30px 18px;color:var(--muted)}
+.foot{background:var(--foot);color:#334155;font-size:11px;line-height:1.7;padding:12px 18px;margin-top:10px}
+@media (max-width:980px){.cols{flex-direction:column}.col,.col.prof{width:100%;flex:none}.tog{margin-left:0}}
 </style>
 </head>
 <body>
-<header>
-  <h1>DA Flow <span class="ver" title="DA Flow v1.9">v1.9</span></h1>
-  <nav class="seg topnav" aria-label="Widoki">
+<div class="top">
+  <div class="brand">DA Flow<small>v1.9</small></div>
+  <div class="ttl" id="ttl">Footprint wielu interwałów · US500</div>
+  <nav aria-label="Widoki">
     <a href="footprint_us500.html">DA Flow</a>
     <a href="live_us500.html" aria-current="page">US500 na żywo</a>
+    <div class="badge">NA ŻYWO</div>
   </nav>
-  <div class="seg" id="theme" style="margin-left:auto" aria-label="Motyw">
-    <button data-v="system" aria-pressed="true">System</button>
-    <button data-v="light" aria-pressed="false">Jasny</button>
-    <button data-v="dark" aria-pressed="false">Ciemny</button>
+</div>
+<div class="bar2">
+  <div class="meta" id="meta">Ładowanie…</div>
+  <div class="tog" id="tog" role="group" aria-label="Pokaż kolumny">
+    <span>Pokaż:</span>
+    <button data-k="m5" aria-pressed="true">M5</button>
+    <button data-k="m15" aria-pressed="true">M15</button>
+    <button data-k="h1" aria-pressed="true">H1</button>
+    <button data-k="prof" aria-pressed="true">Profil sesji</button>
   </div>
-</header>
-<div class="meta" id="meta">Ładowanie…</div>
+</div>
 <div class="warn" id="stale" hidden></div>
 <div class="err" id="msg"></div>
-<div class="grid" id="grid" hidden>
-  <section class="panel"><div class="ptitle" id="tProf">Profil sesji</div><div class="pview"><canvas id="cProf"></canvas></div></section>
-  <section class="panel"><div class="ptitle">Footprint M5 (bid × ask)</div><div class="pview" id="v5"><canvas id="c5"></canvas></div></section>
-  <section class="panel"><div class="ptitle">Footprint M15 (bid × ask)</div><div class="pview" id="v15"><canvas id="c15"></canvas></div></section>
-  <section class="panel"><div class="ptitle">Footprint H1 (bid × ask)</div><div class="pview" id="v60"><canvas id="c60"></canvas></div></section>
+<div class="cols" id="grid" hidden>
+  <section class="col" data-k="m5"><div class="ch" id="h5"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c5"></canvas><canvas class="ov" id="o5"></canvas></div></section>
+  <section class="col" data-k="m15"><div class="ch" id="h15"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c15"></canvas><canvas class="ov" id="o15"></canvas></div></section>
+  <section class="col" data-k="h1"><div class="ch" id="h60"></div><div class="sub">bid × ask z minut M1 (flex, prawdziwy bid/ask) · krok 1 pkt</div><div class="cv"><canvas id="c60"></canvas><canvas class="ov" id="o60"></canvas></div></section>
+  <section class="col prof" data-k="prof"><div class="ch" id="hProf"></div><div class="sub" id="sProf">cała sesja · 70% VA · krok 1 pkt</div><div class="cv"><canvas id="cProf"></canvas><canvas class="ov" id="oProf"></canvas></div></section>
 </div>
-<p class="foot">Prawdziwy bid/ask z ttechou (flex). Czas polski (Europe/Warsaw). Analiza, nie rekomendacja. Odświeżanie co 60 s.</p>
+<div class="none" id="none" hidden>Wszystkie kolumny ukryte – włącz którąś przyciskiem „Pokaż”.</div>
+<div class="foot" id="foot">Ładowanie…</div>
 <script>
-(function () {
-  let th = 'system';
-  try { th = localStorage.getItem('fp-us500-theme') || 'system'; } catch (e) {}
-  const apply = v => {
-    if (v === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', v);
-    document.querySelectorAll('#theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
-  };
-  apply(th);
-  document.querySelectorAll('#theme button').forEach(b => b.onclick = () => {
-    try { localStorage.setItem('fp-us500-theme', b.dataset.v); } catch (e) {}
-    apply(b.dataset.v);
-    if (window.__redraw) window.__redraw();
-  });
-})();
-
 const TZ = 'Europe/Warsaw';
+const N = 6, STEP = 1, IMB = 3;
+const C = {
+  navy:'#1b3a5f', green:'#1b7a4a', greenSoft:'#dcefe2', greenCell:'#b7e0c4',
+  red:'#c0392b', redSoft:'#f6d6d3', redCell:'#f0b8b4', muted:'#6b7280', text:'#1a1d23',
+  poc:'#c9a227', ib:'#7c3aed', onh:'#7A4FA0', nvah:'#0e7490', price:'#1d4ed8',
+  spine:'#cbd5e1', grey:'#f4f5f7'
+};
+const FONT = '"DejaVu Sans",Verdana,"Segoe UI",system-ui,sans-serif';
 const $ = id => document.getElementById(id);
-const fmtPL = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const fmtDay = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const fmtParts = new Intl.DateTimeFormat('en-GB', {
-  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+const fmtHM = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmtDate = new Intl.DateTimeFormat('pl-PL', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
+const fmtParts = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function wp(ms) {
+  const p = Object.fromEntries(fmtParts.formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, min: (+p.hour % 24) * 60 + (+p.minute) };
+}
+function fpx(x) { if (x == null || !isFinite(x)) return '—'; return Math.abs(x - Math.round(x)) < 1e-6 ? String(Math.round(x)) : x.toFixed(1).replace('.', ','); }
+function fint(x) { if (x == null) return '—'; const n = Math.round(x); return n >= 1000 ? n.toLocaleString('pl-PL').replace(/\u00a0|\u202f/g, ' ') : String(n); }
+function fdel(x) { if (x == null) return '—'; const n = Math.round(x); return (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n); }
+function sgnCol(x) { return (x || 0) > 0 ? C.green : (x || 0) < 0 ? C.red : C.muted; }
+
+// ---------- toggles (localStorage, survive reload) ----------
+const VIS_KEY = 'live-us500-cols';
+let VIS = { m5: true, m15: true, h1: true, prof: true };
+try { Object.assign(VIS, JSON.parse(localStorage.getItem(VIS_KEY) || '{}')); } catch (e) {}
+function applyVis() {
+  document.querySelectorAll('#tog button').forEach(b => b.setAttribute('aria-pressed', String(!!VIS[b.dataset.k])));
+  document.querySelectorAll('.col').forEach(s => { s.hidden = !VIS[s.dataset.k]; });
+  $('none').hidden = Object.values(VIS).some(Boolean);
+}
+document.querySelectorAll('#tog button').forEach(b => b.onclick = () => {
+  VIS[b.dataset.k] = !VIS[b.dataset.k];
+  try { localStorage.setItem(VIS_KEY, JSON.stringify(VIS)); } catch (e) {}
+  applyVis(); if (LAST) render(LAST);
 });
+applyVis();
 
-function cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// ---------- data ----------
+const fbin = p => Math.floor(p / STEP + 1e-9) * STEP;
+function prep(raw) {
+  return raw.map(b => ({ ms: Date.parse(b.t), o: b.o, h: b.h, l: b.l, c: b.c, lv: b.lv || [] }))
+    .filter(b => isFinite(b.ms)).sort((a, b) => a.ms - b.ms);
 }
-function warsawParts(d) {
-  const p = Object.fromEntries(fmtParts.formatToParts(d).map(x => [x.type, x.value]));
-  return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute };
-}
-function numPL(v, digits) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '–';
-  return n.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function deltaPL(v) {
-  const n = Number(v) || 0;
-  const s = (n > 0 ? '+' : '') + String(n);
-  return s.replace('-', '−');
-}
-
-function profile(bars) {
-  const prof = new Map();
-  for (const b of bars) {
-    for (const [p, bi, a] of b.lv || []) {
-      if (!prof.has(p)) prof.set(p, [0, 0]);
-      const x = prof.get(p);
-      x[0] += bi; x[1] += a;
-    }
-  }
-  const ps = [...prof.keys()].sort((a, b) => a - b);
-  if (!ps.length) return null;
-  const vol = new Map(ps.map(p => [p, prof.get(p)[0] + prof.get(p)[1]]));
-  const tot = ps.reduce((s, p) => s + vol.get(p), 0);
-  let poc = ps[0];
-  for (const p of ps) if (vol.get(p) > vol.get(poc)) poc = p;
-  let i = ps.indexOf(poc), j = i, acc = vol.get(poc);
-  while (acc < 0.7 * tot && (i > 0 || j < ps.length - 1)) {
-    const up = j < ps.length - 1 ? vol.get(ps[j + 1]) : -1;
-    const dn = i > 0 ? vol.get(ps[i - 1]) : -1;
-    if (up >= dn) { j += 1; acc += up; }
-    else { i -= 1; acc += dn; }
-  }
-  const dayDelta = ps.reduce((s, p) => s + (prof.get(p)[1] - prof.get(p)[0]), 0);
-  return { prof, ps, vol, tot, poc, val: ps[i], vah: ps[j], dayDelta };
-}
-
-function agg(bars, mins) {
+function agg(bars, tf) {
   const g = new Map();
-  const order = [];
   for (const b of bars) {
-    const w = warsawParts(new Date(b.t));
-    const m = w.h * 60 + w.mi;
-    const bucket = Math.floor(m / mins) * mins;
-    const key = `${w.y}-${String(w.mo).padStart(2, '0')}-${String(w.d).padStart(2, '0')}T${String(Math.floor(bucket / 60)).padStart(2, '0')}:${String(bucket % 60).padStart(2, '0')}`;
-    if (!g.has(key)) {
-      g.set(key, { t: key, o: b.o, h: b.h, l: b.l, c: b.c, lv: new Map() });
-      order.push(key);
-    }
-    const x = g.get(key);
-    x.h = Math.max(x.h, b.h);
-    x.l = Math.min(x.l, b.l);
-    x.c = b.c;
-    for (const [p, bi, a] of b.lv || []) {
-      if (!x.lv.has(p)) x.lv.set(p, [0, 0]);
-      const z = x.lv.get(p);
-      z[0] += bi; z[1] += a;
+    const w = wp(b.ms);
+    const st = b.ms - (w.min % tf) * 60000;
+    let x = g.get(st);
+    if (!x) { x = { st, tf, o: b.o, h: b.h, l: b.l, c: b.c, lv: new Map(), vol: 0, delta: 0 }; g.set(st, x); }
+    x.h = Math.max(x.h, b.h); x.l = Math.min(x.l, b.l); x.c = b.c;
+    for (const [p, bi, a] of b.lv) {
+      const k = fbin(p);
+      let z = x.lv.get(k); if (!z) { z = [0, 0]; x.lv.set(k, z); }
+      z[0] += bi; z[1] += a; x.vol += bi + a; x.delta += a - bi;
     }
   }
-  return order.map(k => g.get(k));
+  const out = [...g.values()].sort((a, b) => a.st - b.st);
+  let acc = 0;
+  const lastMs = bars.length ? bars[bars.length - 1].ms : 0;
+  for (const x of out) {
+    acc += x.delta; x.acc = acc;
+    x.incomplete = x.st + tf * 60000 > lastMs + 60000;
+    let poc = null, pv = -1;
+    for (const [p, [bi, a]] of x.lv) { const v = bi + a; if (v > pv || (v === pv && -Math.abs(p) > -Math.abs(poc))) { pv = v; poc = p; } }
+    x.poc = poc; x.maxv = Math.max(1, pv);
+    x.flags = flags(x);
+  }
+  return out;
+}
+function flags(x) {
+  const f = new Map(), by = x.lv;
+  for (const [p, [, a]] of by) {
+    const bb = by.has(p - STEP) ? by.get(p - STEP)[0] : 0;
+    if (a > 0 && ((bb === 0 && a >= IMB) || (bb > 0 && a / bb >= IMB))) f.set(p, 'buy');
+  }
+  for (const [p, [bi]] of by) {
+    const aa = by.has(p + STEP) ? by.get(p + STEP)[1] : 0;
+    if (bi > 0 && ((aa === 0 && bi >= IMB) || (aa > 0 && bi / aa >= IMB))) f.set(p, f.get(p) === 'buy' ? 'both' : 'sell');
+  }
+  return f;
+}
+function va70(vol) { // Map price->vol, same algorithm as status_va.va70
+  const ps = [...vol.keys()].filter(p => vol.get(p) > 0).sort((a, b) => a - b);
+  if (!ps.length) return null;
+  const vs = ps.map(p => vol.get(p)), tot = vs.reduce((s, v) => s + v, 0);
+  let pi = 0; for (let k = 1; k < ps.length; k++) { const a = [vs[k], -Math.abs(k - ps.length / 2)], b = [vs[pi], -Math.abs(pi - ps.length / 2)]; if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) pi = k; }
+  let lo = pi, hi = pi, acc = vs[pi];
+  while (acc < 0.7 * tot && (lo > 0 || hi < ps.length - 1)) {
+    const up = hi < ps.length - 1 ? vs[hi + 1] : -1, dn = lo > 0 ? vs[lo - 1] : -1;
+    if (up >= dn) { hi++; acc += up; } else { lo--; acc += dn; }
+  }
+  return { ps, vs, tot, poc: ps[pi], val: ps[lo], vah: ps[hi] };
+}
+function volMap(bars) {
+  const m = new Map();
+  for (const b of bars) for (const [p, bi, a] of b.lv) { const k = fbin(p); m.set(k, (m.get(k) || 0) + bi + a); }
+  return m;
+}
+function refs(bars) { // IB 15:30–16:30 PL, ONH + nVAH from night 00:00–15:30 PL (as footprint_multi.overnight_and_ib)
+  if (!bars.length) return [];
+  const day = wp(bars[bars.length - 1].ms).day;
+  const night = [], ib = [];
+  for (const b of bars) {
+    const w = wp(b.ms); if (w.day !== day) continue;
+    if (w.min < 930) night.push(b); else if (w.min < 990) ib.push(b);
+  }
+  const items = [];
+  const hiOf = bs => Math.max(...bs.flatMap(b => b.lv.map(l => l[0])));
+  const loOf = bs => Math.min(...bs.flatMap(b => b.lv.map(l => l[0])));
+  if (ib.length) { items.push([hiOf(ib), 'IB High', C.ib]); items.push([loOf(ib), 'IB Low', C.ib]); }
+  if (night.length) {
+    items.push([hiOf(night), 'ONH', C.onh]);
+    const nv = va70(volMap(night)); if (nv) items.push([nv.vah, 'nVAH', C.nvah]);
+  }
+  return items.filter(i => isFinite(i[0]));
 }
 
-function fitCanvas(cv, cssW, cssH) {
+// ---------- drawing ----------
+function fit(cv, h) {
+  const w = Math.max(240, cv.parentElement.clientWidth);
   const dpr = Math.max(1, window.devicePixelRatio || 1);
-  cv.width = Math.round(cssW * dpr);
-  cv.height = Math.round(cssH * dpr);
-  cv.style.width = cssW + 'px';
-  cv.style.height = cssH + 'px';
-  const ctx = cv.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return ctx;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return [ctx, w];
 }
+function font(ctx, px, bold) { ctx.font = (bold ? 'bold ' : '') + px + 'px ' + FONT; }
+function fitFont(ctx, t, maxW, px, bold) { font(ctx, px, bold); while (px > 6.5 && ctx.measureText(t).width > maxW) { px -= 0.5; font(ctx, px, bold); } }
+function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function niceStep(r) { const m = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, r)))); const f = r / m; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * m; }
+function tickStep(span) { return span > 40 ? 5 : span > 16 ? 2 : 1; }
 
-function yScale(lo, hi, top, bot) {
-  const span = (hi - lo) || 1;
-  return p => top + (hi - p) / span * (bot - top);
-}
-
-function drawProfile(cv, wrap, pr, lo, hi, lastC) {
-  const w = Math.max(160, wrap.clientWidth);
-  const h = Math.max(360, wrap.clientHeight);
-  const ctx = fitCanvas(cv, w, h);
-  const top = 8, bot = h - 36, y = yScale(lo, hi, top, bot);
-  const maxV = Math.max(...pr.ps.map(p => pr.vol.get(p)), 1);
-  const ink = cssVar('--ink'), mut = cssVar('--mut'), pocC = cssVar('--poc'), vaC = cssVar('--va');
-  const buy = cssVar('--buy'), sell = cssVar('--sell'), outside = cssVar('--outside');
-  const px = cssVar('--px'), vaFill = cssVar('--va-fill');
-  ctx.clearRect(0, 0, w, h);
-  const left = 8, right = w - 52, barW = right - left;
-  // VA band
-  ctx.fillStyle = vaFill;
-  const yVah = y(pr.vah + 0.25), yVal = y(pr.val - 0.25);
-  ctx.fillRect(0, yVah, w, yVal - yVah);
-  const rh = Math.max(2, Math.abs(y(lo) - y(lo + 0.5)) * 0.9);
-  for (const p of pr.ps) {
-    const v = pr.vol.get(p);
-    const bw = (v / maxV) * barW;
-    ctx.fillStyle = p === pr.poc ? vaC : (p >= pr.val && p <= pr.vah ? pocC : outside);
-    ctx.fillRect(right - bw, y(p) - rh / 2, bw, rh);
+function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH) {
+  const bars = all.slice(-N), n = bars.length;
+  const L = 44, R = 6, T = 4;
+  const fpH = Math.round((ymax - ymin) * rowH);
+  const gap = 26, accH = 70, rowsH = 76;
+  const H = T + fpH + gap + accH + rowsH;
+  const [ctx, W] = fit(cv, H);
+  const pw = W - L - R;
+  const X = u => L + (u + 0.55) / (n + 1.6) * pw;
+  const unit = pw / (n + 1.6);
+  const Y = p => T + (ymax - p) / (ymax - ymin) * fpH;
+  // frame + grid
+  ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, fpH); ctx.clip();
+  for (let p = Math.floor(ymin); p <= Math.ceil(ymax); p += STEP) {
+    ctx.strokeStyle = p % 5 === 0 ? '#eef1f4' : '#f7f8fa'; ctx.lineWidth = p % 5 === 0 ? 0.8 : 0.5;
+    ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(L + pw, Y(p)); ctx.stroke();
   }
-  // POC / last price
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = vaC; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, y(pr.poc)); ctx.lineTo(w, y(pr.poc)); ctx.stroke();
-  ctx.strokeStyle = px; ctx.lineWidth = 0.8; ctx.setLineDash([2, 4]);
-  ctx.beginPath(); ctx.moveTo(0, y(lastC)); ctx.lineTo(w, y(lastC)); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font = '11px ' + cssVar('--f-num');
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = vaC; ctx.fillText('POC ' + numPL(pr.poc, 1), right + 4, y(pr.poc));
-  ctx.fillStyle = pocC; ctx.fillText('VAH ' + numPL(pr.vah, 1), right + 4, y(pr.vah));
-  ctx.fillText('VAL ' + numPL(pr.val, 1), right + 4, y(pr.val));
-}
-
-function drawFp(cv, wrap, data, pr, lo, hi, lastC, scrollEnd) {
-  const row = Math.max(13, Math.min(16, (wrap.clientHeight - 44) / Math.max(8, (hi - lo) / 0.5)));
-  const h = Math.max(360, wrap.clientHeight, row * ((hi - lo) / 0.5) + 48);
-  const cw = data.length <= 8 ? Math.max(36, Math.floor((wrap.clientWidth - 8) / Math.max(1, data.length))) : 36;
-  const w = Math.max(wrap.clientWidth, Math.ceil(data.length * cw) + 8);
-  const ctx = fitCanvas(cv, w, h);
-  const top = 8, bot = h - 36, y = yScale(lo, hi, top, bot);
-  const ink = cssVar('--ink'), mut = cssVar('--mut'), pocC = cssVar('--poc'), vaC = cssVar('--va');
-  const buy = cssVar('--buy'), sell = cssVar('--sell'), wick = cssVar('--wick');
-  const px = cssVar('--px'), vaFill = cssVar('--va-fill'), panel = cssVar('--plot-panel');
-  const cellbg = cssVar('--cellbg');
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = vaFill;
-  ctx.fillRect(0, y(pr.vah + 0.25), w, y(pr.val - 0.25) - y(pr.vah + 0.25));
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = vaC; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, y(pr.poc)); ctx.lineTo(w, y(pr.poc)); ctx.stroke();
-  ctx.strokeStyle = px; ctx.lineWidth = 0.8; ctx.setLineDash([2, 4]);
-  ctx.beginPath(); ctx.moveTo(0, y(lastC)); ctx.lineTo(w, y(lastC)); ctx.stroke();
-  ctx.setLineDash([]);
-  const fs = data.length > 40 ? 8 : 9;
-  ctx.font = fs + 'px ' + cssVar('--f-num');
-  ctx.textAlign = 'center';
-  for (let k = 0; k < data.length; k++) {
-    const x = data[k];
-    const cx = 4 + k * cw + cw / 2;
-    // wick
-    ctx.strokeStyle = wick; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(cx, y(x.h)); ctx.lineTo(cx, y(x.l)); ctx.stroke();
-    const up = x.c >= x.o;
-    const col = up ? buy : sell;
-    const y1 = y(Math.max(x.o, x.c)), y2 = y(Math.min(x.o, x.c));
-    const bh = Math.max(Math.abs(y2 - y1), 2);
-    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
-    ctx.strokeRect(cx - cw * 0.42, y1, cw * 0.84, bh);
-    let dlt = 0;
-    const levels = [...x.lv.entries()].sort((a, b) => a[0] - b[0]);
-    for (const [p, [bi, a]] of levels) {
-      if (bi + a === 0) continue;
-      const d = a - bi;
-      dlt += d;
-      ctx.fillStyle = cellbg;
-      const ty = y(p);
-      ctx.fillRect(cx - cw * 0.46, ty - 6, cw * 0.92, 12);
-      ctx.fillStyle = d > 0 ? buy : (d < 0 ? sell : mut);
-      ctx.textBaseline = 'middle';
-      ctx.fillText(bi + 'x' + a, cx, ty);
+  const fs = Math.max(7.5, Math.min(11, Math.min(rowH * 0.72, unit * 0.88 / 6.2)));
+  bars.forEach((c, i) => {
+    const x0 = X(i - 0.46), cw = unit * 0.88;
+    ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, cw, fpH);
+    ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 0.6; ctx.strokeRect(x0, T, cw, fpH);
+    for (const [p, [bi, a]] of c.lv) {
+      if (p < ymin || p > ymax - 1e-9) continue;
+      const yTop = Y(p + 0.48), hh = rowH * 0.96, yc = Y(p);
+      const intens = Math.min(1, Math.pow((bi + a) / c.maxv, 0.7));
+      const fl = c.flags.get(p);
+      const sell = fl === 'sell' || fl === 'both', buy = fl === 'buy' || fl === 'both';
+      ctx.globalAlpha = 0.40 + 0.50 * intens;
+      ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(x0, yTop, cw / 2, hh);
+      ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(x0 + cw / 2, yTop, cw / 2, hh);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text; ctx.fillText(fint(bi), x0 + cw * 0.23, yc);
+      font(ctx, Math.max(6, fs - 1.5)); ctx.fillStyle = '#64748b'; ctx.fillText('×', x0 + cw * 0.5, yc);
+      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text; ctx.fillText(fint(a), x0 + cw * 0.77, yc);
+      if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(x0 + 1, yTop + 1, cw - 2, hh - 2); }
     }
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = dlt > 0 ? buy : (dlt < 0 ? sell : mut);
-    const lab = (x.t.slice(11, 16) || x.t) + '\n' + 'Δ ' + deltaPL(dlt);
-    const lines = [x.t.slice(11, 16) || x.t, 'Δ ' + deltaPL(dlt)];
-    ctx.fillText(lines[0], cx, bot + 2);
-    ctx.fillText(lines[1], cx, bot + 14);
+    // wick + thin body at the right edge
+    const xw = X(i + 0.46);
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xw, Y(c.h)); ctx.lineTo(xw, Y(c.l)); ctx.stroke();
+    let y1 = Math.min(c.o, c.c), y2 = Math.max(c.o, c.c);
+    if (y2 - y1 < 0.15) { y1 -= 0.12; y2 += 0.12; }
+    ctx.fillStyle = c.c >= c.o ? C.green : C.red;
+    ctx.fillRect(X(i + 0.42), Y(y2), Math.max(3, unit * 0.09), Math.max(2, Y(y1) - Y(y2)));
+  });
+  for (const [y, , col] of refItems) {
+    if (y < ymin || y > ymax) continue;
+    ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.setLineDash([3, 2]); ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(L, Y(y)); ctx.lineTo(L + pw, Y(y)); ctx.stroke(); ctx.globalAlpha = 1;
   }
-  if (scrollEnd && wrap._pinned !== false) {
-    wrap.scrollLeft = wrap.scrollWidth;
+  if (price != null && price >= ymin && price <= ymax) {
+    ctx.strokeStyle = C.price; ctx.lineWidth = 1.3; ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(L, Y(price)); ctx.lineTo(L + pw, Y(price)); ctx.stroke();
   }
+  ctx.setLineDash([]); ctx.restore();
+  // labels on the right (ref lines + price)
+  const used = [];
+  const lx = X(n - 0.05) + 4;
+  if (price != null && price >= ymin && price <= ymax) {
+    font(ctx, 10.5, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
+    ctx.fillStyle = C.price; rrect(ctx, lx, Y(price) - 9, tw, 18, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 6, Y(price));
+    used.push(Y(price));
+  }
+  for (const [y, lab, col] of refItems) {
+    if (y < ymin || y > ymax) continue;
+    let yy = Y(y);
+    for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
+    used.push(yy);
+    font(ctx, 9.5); const t = `${lab} ${fpx(y)}`; const tw = ctx.measureText(t).width + 10;
+    const bx = Math.min(lx, W - tw - 1);
+    ctx.fillStyle = '#fff'; rrect(ctx, bx, yy - 8, tw, 16, 3); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
+  }
+  // spine + y ticks
+  ctx.strokeStyle = C.spine; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, fpH - 1);
+  const st = tickStep(ymax - ymin);
+  font(ctx, 10); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let p = Math.ceil(ymin / st) * st; p <= ymax; p += st) {
+    ctx.fillText(fpx(p), L - 5, Y(p));
+    ctx.beginPath(); ctx.moveTo(L - 3, Y(p)); ctx.lineTo(L, Y(p)); ctx.strokeStyle = C.text; ctx.stroke();
+  }
+  // clip notes (candles extending beyond shared window)
+  bars.forEach((c, i) => {
+    let t = null;
+    if (c.h < ymin - 0.05) t = `↓ ${fpx(c.l)}–${fpx(c.h)}`;
+    else if (c.l > ymax + 0.05) t = `↑ ${fpx(c.l)}–${fpx(c.h)}`;
+    else if (c.l < ymin - 0.05) t = `↓ do ${fpx(c.l)}`;
+    else if (c.h > ymax + 0.05) t = `↑ do ${fpx(c.h)}`;
+    if (!t) return;
+    font(ctx, 9, true);
+    if (ctx.measureText(t).width + 8 > unit * 0.96) t = t[0] + ' ' + fpx(t[0] === '↓' ? c.l : c.h);
+    fitFont(ctx, t, unit * 0.96 - 8, 9, true); const tw = ctx.measureText(t).width + 8;
+    const cx = X(i), ty = T + fpH + 4;
+    ctx.fillStyle = '#f8fafc'; rrect(ctx, cx - tw / 2, ty, tw, 15, 3); ctx.fill();
+    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = C.navy; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, cx, ty + 7.5);
+  });
+  // cumulative delta panel
+  const aT = T + fpH + gap;
+  const accs = bars.map(c => c.acc);
+  let lo = Math.min(0, ...accs), hi = Math.max(0, ...accs);
+  const pad = Math.max(20, (hi - lo) * 0.18); lo -= pad; hi += pad;
+  const AY = v => aT + (hi - v) / (hi - lo) * accH;
+  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, bars, tf };
+  ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, aT + 0.5, pw - 1, accH - 1);
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(L, AY(0)); ctx.lineTo(L + pw, AY(0)); ctx.stroke();
+  if (n) {
+    const poly = () => { ctx.beginPath(); ctx.moveTo(X(0), AY(0)); accs.forEach((v, i) => ctx.lineTo(X(i), AY(v))); ctx.lineTo(X(n - 1), AY(0)); ctx.closePath(); };
+    ctx.save(); ctx.beginPath(); ctx.rect(L, aT, pw, AY(0) - aT); ctx.clip(); ctx.globalAlpha = 0.22; ctx.fillStyle = C.green; poly(); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, AY(0), pw, aT + accH - AY(0)); ctx.clip(); ctx.globalAlpha = 0.22; ctx.fillStyle = C.red; poly(); ctx.fill(); ctx.restore();
+    const lc = sgnCol(accs[n - 1]);
+    ctx.strokeStyle = lc; ctx.lineWidth = 1.6; ctx.beginPath(); accs.forEach((v, i) => i ? ctx.lineTo(X(i), AY(v)) : ctx.moveTo(X(i), AY(v))); ctx.stroke();
+    ctx.fillStyle = lc; accs.forEach((v, i) => { ctx.beginPath(); ctx.arc(X(i), AY(v), 2.4, 0, 7); ctx.fill(); });
+  }
+  font(ctx, 8.5); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const ast = niceStep((hi - lo) / 3);
+  for (let v = Math.ceil(lo / ast) * ast; v <= hi; v += ast) ctx.fillText(fdel(v), L - 5, AY(v));
+  ctx.save(); ctx.translate(10, aT + accH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillStyle = C.muted; ctx.fillText('Σ Δ', 0, 0); ctx.restore();
+  ctx.save(); ctx.translate(10, T + fpH / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillStyle = C.muted; font(ctx, 9); ctx.fillText('cena (krok 1 pkt)', 0, 0); ctx.restore();
+  // rows under each candle
+  const rT = aT + accH + 8;
+  bars.forEach((c, i) => {
+    const cx = X(i); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const mw = unit * 0.94, r = [
+      [fmtHM.format(new Date(c.st)) + (c.incomplete ? '·' : ''), 11, false, C.text, 0],
+      [fint(c.vol), 9.5, false, C.muted, 17],
+      ['Δ ' + fdel(c.delta), 10, true, sgnCol(c.delta), 33],
+      ['Σ Δ ' + fdel(c.acc), 9.5, true, sgnCol(c.acc), 51]];
+    for (const [t, px, b, col, dy] of r) { fitFont(ctx, t, mw, px, b); ctx.fillStyle = col; ctx.fillText(t, cx, rT + dy); }
+  });
+}
+
+function drawProfile(cv, bars, price, H, win) {
+  const vm = volMap(bars), va = va70(vm);
+  if (!va) return null;
+  const [ctx, W] = fit(cv, H);
+  const lo = va.ps[0] - 1, hi = va.ps[va.ps.length - 1] + 1;
+  const L = 40, R = 6, T = 4, B = H - 4;
+  const Y = p => T + (hi - p) / (hi - lo) * (B - T);
+  const pw = W - L - R, maxV = Math.max(...va.vs);
+  GEO[cv.id] = { type: 'prof', W, H, L, pw, T, B, lo, hi, vm };
+  ctx.fillStyle = 'rgba(29,78,216,.06)'; ctx.fillRect(L, Y(va.vah + 1), pw, Y(va.val) - Y(va.vah + 1));
+  if (win) { ctx.fillStyle = 'rgba(201,162,39,.08)'; ctx.fillRect(L, Y(win[1]), pw, Y(win[0]) - Y(win[1])); }
+  const rh = Math.max(1.5, (B - T) / (hi - lo) * 0.86);
+  va.ps.forEach((p, k) => {
+    const w = va.vs[k] / maxV * (pw - 70);
+    ctx.fillStyle = p === va.poc ? C.poc : (p >= va.val && p <= va.vah ? '#7aa2d6' : '#cbd5e1');
+    ctx.fillRect(L, Y(p + 0.5) - rh / 2, w, rh);
+  });
+  const lab = (y, t, col, bold) => { font(ctx, 9.5, bold); ctx.fillStyle = col; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - R, y); };
+  ctx.setLineDash([3, 2]); ctx.lineWidth = 1;
+  for (const [p, col] of [[va.vah + 1, C.nvah], [va.val, C.nvah]]) { ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(W - R, Y(p)); ctx.stroke(); }
+  ctx.strokeStyle = C.price; ctx.lineWidth = 1.3; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(L, Y(price)); ctx.lineTo(W - R, Y(price)); ctx.stroke(); ctx.setLineDash([]);
+  lab(Y(va.vah + 1) - 7, 'VAH ' + fpx(va.vah), C.nvah); lab(Y(va.val) + 7, 'VAL ' + fpx(va.val), C.nvah);
+  lab(Y(va.poc + 0.5), 'POC ' + fpx(va.poc), '#8a6d00', true); lab(Y(price) - 8, fpx(price), C.price, true);
+  ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, B - T - 1);
+  const st = tickStep(hi - lo) * (hi - lo > 80 ? 2 : 1);
+  font(ctx, 10); ctx.fillStyle = C.text; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let p = Math.ceil(lo / st) * st; p <= hi; p += st) ctx.fillText(fpx(p), L - 5, Y(p));
+  return va;
+}
+
+function colHead(el, tf, all) {
+  const last = all[all.length - 1];
+  const prev = all.slice(0, -1).slice(-12).filter(c => c.vol > 0);
+  const avg = prev.length ? prev.reduce((s, c) => s + c.vol, 0) / prev.length : null;
+  const mult = avg ? (last.vol / avg).toFixed(1).replace('.', ',') + '× śr.' : '— śr.';
+  el.innerHTML = `<span class="tf">${tf === 60 ? 'H1' : 'M' + tf}</span>` +
+    `<span class="d" style="color:${sgnCol(last.delta)}">Δ ${fdel(last.delta)}</span>` +
+    `<span class="v">wol. ${mult}${last.incomplete ? ' · w toku' : ''}</span>`;
+  return { delta: last.delta, mult };
 }
 
 let LAST = null;
-
+const GEO = {};
+// ---------- crosshair (mouse + touch via pointer events) ----------
+let CROSS = null;
+function ovCtx(id) {
+  const main = $(id), ov = $('o' + id.slice(1)), g = GEO[id];
+  if (!g || main.closest('.col').hidden) return null;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  if (ov.width !== main.width || ov.height !== main.height) { ov.width = main.width; ov.height = main.height; }
+  ov.style.width = g.W + 'px'; ov.style.height = g.H + 'px';
+  const ctx = ov.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, g.W, g.H);
+  return [ctx, g];
+}
+function tag(ctx, x, y, t, align, bg) {
+  font(ctx, 10, true); const tw = ctx.measureText(t).width + 8;
+  let bx = align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x;
+  ctx.fillStyle = bg || '#334155'; rrect(ctx, bx, y - 8, tw, 16, 3); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 4, y);
+}
+function dash(ctx, x1, y1, x2, y2) { ctx.strokeStyle = '#334155'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); }
+function drawCross() {
+  for (const id of ['c5', 'c15', 'c60', 'cProf']) {
+    const r = ovCtx(id); if (!r) continue; const [ctx, g] = r;
+    if (!CROSS) continue;
+    const src = CROSS.id === id;
+    if (g.type === 'fp') {
+      const Y = p => g.T + (g.ymax - p) / (g.ymax - g.ymin) * g.fpH;
+      const yb = g.T + g.fpH;
+      if (CROSS.price != null && CROSS.price >= g.ymin && CROSS.price <= g.ymax) {
+        const y = Y(CROSS.price); dash(ctx, g.L, y, g.L + g.pw, y);
+        tag(ctx, g.L - 1, y, fpx(Math.round(CROSS.price * 10) / 10), 'right');
+      }
+      if (src) {
+        dash(ctx, CROSS.x, g.T, CROSS.x, g.aT + g.accH);
+        const i = Math.round((CROSS.x - g.L) / g.unit - 0.55);
+        if (i >= 0 && i < g.n) {
+          const c = g.bars[i];
+          const lab = `${g.tf === 60 ? 'H1' : 'M' + g.tf} ${fmtHM.format(new Date(c.st))}${c.incomplete ? '·' : ''} · Δ ${fdel(c.delta)}`;
+          tag(ctx, Math.min(Math.max(CROSS.x, g.L + 60), g.L + g.pw - 60), yb + 10, lab, 'center');
+        }
+        if (CROSS.acc != null) {
+          dash(ctx, g.L, CROSS.y, g.L + g.pw, CROSS.y);
+          tag(ctx, g.L - 1, CROSS.y, 'Σ Δ ' + fdel(CROSS.acc), 'right', CROSS.acc >= 0 ? C.green : C.red);
+        }
+      }
+    } else {
+      const Y = p => g.T + (g.hi - p) / (g.hi - g.lo) * (g.B - g.T);
+      if (CROSS.price != null && CROSS.price >= g.lo && CROSS.price <= g.hi) {
+        const y = Y(CROSS.price); dash(ctx, g.L, y, g.L + g.pw, y);
+        const b = Math.floor(CROSS.price + 1e-9);
+        tag(ctx, g.L - 1, y, fpx(Math.round(CROSS.price * 10) / 10), 'right');
+        tag(ctx, g.L + g.pw, y - 12, 'wol. ' + fint(g.vm.get(b) || 0), 'right', '#475569');
+      }
+      if (src) dash(ctx, CROSS.x, g.T, CROSS.x, g.B);
+    }
+  }
+}
+function onPtr(e, id) {
+  const g = GEO[id]; if (!g) return;
+  const rc = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX - rc.left, y = e.clientY - rc.top;
+  if (x < g.L || x > g.L + g.pw) { CROSS = null; drawCross(); return; }
+  if (g.type === 'fp') {
+    if (y >= g.T && y <= g.T + g.fpH) CROSS = { id, x, y, price: g.ymax - (y - g.T) / g.fpH * (g.ymax - g.ymin) };
+    else if (y >= g.aT && y <= g.aT + g.accH) CROSS = { id, x, y, acc: g.ahi - (y - g.aT) / g.accH * (g.ahi - g.alo) };
+    else CROSS = { id, x, y };
+  } else {
+    CROSS = (y >= g.T && y <= g.B) ? { id, x, y, price: g.hi - (y - g.T) / (g.B - g.T) * (g.hi - g.lo) } : null;
+  }
+  drawCross();
+}
+for (const id of ['c5', 'c15', 'c60', 'cProf']) {
+  const w = $(id).parentElement;
+  w.addEventListener('pointermove', e => onPtr(e, id));
+  w.addEventListener('pointerdown', e => onPtr(e, id));
+  w.addEventListener('pointerleave', () => { CROSS = null; drawCross(); });
+}
 function render(data) {
   LAST = data;
   const msg = $('msg'), stale = $('stale'), grid = $('grid'), meta = $('meta');
   msg.textContent = '';
-  if (!data || !data.bars || !data.bars.length) {
-    grid.hidden = true;
-    meta.textContent = 'Brak danych US500 na żywo.';
-    msg.textContent = 'Brak świec M1 w live/US500_live.json.';
-    document.body.dataset.status = 'empty';
-    return;
-  }
-  const bars = data.bars.slice().sort((a, b) => a.t < b.t ? -1 : 1);
-  const pr = profile(bars);
-  if (!pr) {
-    grid.hidden = true;
-    msg.textContent = 'Brak poziomów bid/ask w danych.';
-    document.body.dataset.status = 'empty';
-    return;
-  }
-  const first = new Date(bars[0].t);
-  const last = bars[bars.length - 1];
-  const lastT = new Date(last.t);
-  const updated = data.updated_at ? new Date(data.updated_at) : lastT;
+  const bars = prep((data && data.bars) || []).filter(b => b.lv.length || b.h);
+  if (!bars.length) { grid.hidden = true; meta.textContent = 'Brak danych US500 na żywo.'; msg.textContent = 'Brak świec M1 w live/US500_live.json.'; document.body.dataset.status = 'empty'; return; }
+  const last = bars[bars.length - 1], price = last.c;
+  const updated = data.updated_at ? new Date(data.updated_at) : new Date(last.ms);
   const ageMin = (Date.now() - updated.getTime()) / 60000;
-  const price = last.c;
-  meta.innerHTML =
-    `Sesja ${data.session || '–'} od <b>${fmtDay.format(first)}</b> do <b>${fmtPL.format(lastT)} PL</b>` +
-    ` <span class="mut">|</span> Cena <b id="price">${numPL(price, 1)}</b>` +
-    ` <span class="mut">|</span> Delta dnia <b id="dayDelta">${deltaPL(pr.dayDelta)}</b>` +
-    ` <span class="mut">|</span> Ostatnia aktualizacja <b id="upd">${fmtPL.format(updated)} PL</b>`;
-  if (ageMin > 15) {
-    stale.hidden = false;
-    stale.textContent = `Uwaga: dane starsze niż 15 min (ostatnia aktualizacja ${fmtPL.format(updated)} PL).`;
-    document.body.dataset.stale = '1';
-  } else {
-    stale.hidden = true;
-    stale.textContent = '';
-    document.body.dataset.stale = '0';
-  }
-  $('tProf').innerHTML = `Profil sesji <span>POC ${numPL(pr.poc, 1)} · VAH ${numPL(pr.vah, 1)} · VAL ${numPL(pr.val, 1)}</span>`;
+  const TF = { m5: 5, m15: 15, h1: 60 };
+  const series = { 5: agg(bars, 5), 15: agg(bars, 15), 60: agg(bars, 60) };
+  const dayDelta = series[5].length ? series[5][series[5].length - 1].acc : 0;
+  $('ttl').textContent = `Footprint wielu interwałów · US500 · ${fmtDate.format(new Date(last.ms))} ${fmtHM.format(new Date(last.ms))} PL`;
+  meta.innerHTML = `Sesja <b>${data.session || '–'}</b> od <b>${fmtHM.format(new Date(bars[0].ms))}</b> do <b>${fmtHM.format(new Date(last.ms))} PL</b>` +
+    ` <span class="mut">|</span> Cena <b id="price" style="color:${C.price}">${fpx(price)}</b>` +
+    ` <span class="mut">|</span> Delta dnia <b id="dayDelta" style="color:${sgnCol(dayDelta)}">${fdel(dayDelta)}</b>` +
+    ` <span class="mut">|</span> Aktualizacja <b id="upd">${fmtHM.format(updated)} PL</b>`;
+  if (ageMin > 15) { stale.hidden = false; stale.textContent = `Uwaga: dane starsze niż 15 min (ostatnia aktualizacja ${fmtHM.format(updated)} PL).`; document.body.dataset.stale = '1'; }
+  else { stale.hidden = true; stale.textContent = ''; document.body.dataset.stale = '0'; }
   grid.hidden = false;
-  const pad = 1;
-  const lo = Math.min(pr.ps[0], ...bars.map(b => b.l)) - pad;
-  const hi = Math.max(pr.ps[pr.ps.length - 1], ...bars.map(b => b.h)) + pad;
-  drawProfile($('cProf'), $('cProf').parentElement, pr, lo, hi, price);
-  drawFp($('c5'), $('v5'), agg(bars, 5), pr, lo, hi, price, true);
-  drawFp($('c15'), $('v15'), agg(bars, 15), pr, lo, hi, price, true);
-  drawFp($('c60'), $('v60'), agg(bars, 60), pr, lo, hi, price, true);
-  document.body.dataset.status = 'ok';
-  document.body.dataset.price = String(price);
-  document.body.dataset.poc = String(pr.poc);
-  document.body.dataset.vah = String(pr.vah);
-  document.body.dataset.val = String(pr.val);
-  document.body.dataset.delta = String(pr.dayDelta);
-  document.body.dataset.nbars = String(bars.length);
+  // shared Y: shorter visible timeframes (like Discord: all but the longest), + 2 pt pad, price ±3
+  const visTf = Object.keys(TF).filter(k => VIS[k]).map(k => TF[k]);
+  const basis = visTf.length > 1 ? visTf.slice(0, -1) : visTf.length ? visTf : [5, 15];
+  const vb = basis.flatMap(tf => series[tf].slice(-N));
+  let ymin = Math.floor(Math.min(...vb.map(c => c.l)) - 1e-9) - 2, ymax = Math.ceil(Math.max(...vb.map(c => c.h)) - 1e-9) + 2;
+  ymin = Math.min(ymin, Math.floor(price - 3)); ymax = Math.max(ymax, Math.ceil(price + 3));
+  const rowH = Math.max(13, Math.min(19, (window.innerHeight - 330) / (ymax - ymin)));
+  const refItems = refs(bars);
+  let fpTotal = Math.round((ymax - ymin) * rowH) + 4 + 26 + 70 + 76;
+  for (const [k, tf] of Object.entries(TF)) {
+    if (!VIS[k]) continue;
+    colHead($('h' + tf), tf, series[tf]);
+    drawFp($('c' + tf), series[tf], tf, ymin, ymax, price, refItems, rowH);
+  }
+  let va = null;
+  if (VIS.prof) {
+    va = drawProfile($('cProf'), bars, price, visTf.length ? fpTotal - 176 + 70 : Math.max(500, window.innerHeight - 260), visTf.length ? [ymin, ymax] : null);
+    if (va) {
+      const d = $('hProf');
+      d.innerHTML = `<span class="tf">Profil sesji</span>`;
+      $('sProf').innerHTML = `<b style="color:#8a6d00">POC ${fpx(va.poc)}</b> · <b style="color:${C.nvah}">VAH ${fpx(va.vah)} · VAL ${fpx(va.val)}</b><br>cała sesja od ${fmtHM.format(new Date(bars[0].ms))} PL · 70% VA${visTf.length ? ' · żółte tło = okno footprintu' : ''}`;
+    }
+  }
+  const nv = refItems.find(r => r[1] === 'nVAH'), onh = refItems.find(r => r[1] === 'ONH');
+  const ibh = refItems.find(r => r[1] === 'IB High'), ibl = refItems.find(r => r[1] === 'IB Low');
+  $('foot').innerHTML =
+    `Bid × ask z minut M1 ttechou flex (prawdziwy wolumen bid/ask na poziom 0,5 pkt, zsumowany do kroku 1 pkt) · ${bars.length} minut M1 ${fmtHM.format(new Date(bars[0].ms))}–${fmtHM.format(new Date(last.ms))} PL · ostatnie ${N} świec na interwał, „·” = świeca w toku.<br>` +
+    `Wspólna oś Y ${fpx(ymin)}–${fpx(ymax)} (zakres krótszych interwałów + margines; dłuższe świece poza oknem przycięte ↑/↓) · ` +
+    `IB ${ibl ? fpx(ibl[0]) + '–' + fpx(ibh[0]) : '— (od 15:30)'} · ONH ${onh ? fpx(onh[0]) : '—'} · nVAH ${nv ? fpx(nv[0]) : '—'} (noc 00:00–15:30 PL) · imbalance ${IMB}× po przekątnej (pogrubione) · ramka złota = POC świecy · wol. X× śr. = wolumen bieżącej świecy / średnia z 12 poprzednich.<br>` +
+    `Σ Δ (acc delta) liczona od ${fmtHM.format(new Date(bars[0].ms))} PL · czas polski (Europe/Warsaw) · strona odświeża dane co 60 s, dane aktualizowane co 5 min (pn–pt 6:00–21:55) · analiza, nie rekomendacja.`;
+  Object.assign(document.body.dataset, { status: 'ok', price: String(price), delta: String(dayDelta), nbars: String(bars.length) });
+  drawCross();
+  if (va) Object.assign(document.body.dataset, { poc: String(va.poc), vah: String(va.vah), val: String(va.val) });
 }
 
-window.__redraw = () => { if (LAST) render(LAST); };
-
 async function load() {
-  const msg = $('msg');
   try {
     const r = await fetch('live/US500_live.json?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    render(data);
+    render(await r.json());
   } catch (e) {
     $('grid').hidden = true;
     $('meta').textContent = 'Nie udało się wczytać danych na żywo.';
-    msg.textContent = 'Błąd wczytywania live/US500_live.json: ' + (e && e.message ? e.message : e);
+    $('msg').textContent = 'Błąd wczytywania live/US500_live.json: ' + (e && e.message ? e.message : e);
     document.body.dataset.status = 'error';
   }
 }
-
 load();
 setInterval(load, 60000);
-addEventListener('resize', () => { if (window.__redraw) window.__redraw(); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (window.__redraw) window.__redraw(); });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (LAST) render(LAST); }, 150); });
 </script>
 </body>
 </html>
