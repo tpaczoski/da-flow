@@ -227,39 +227,79 @@ function tickStep(span) { return span > 40 ? 5 : span > 16 ? 2 : 1; }
 
 function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   const bars = visibleSlice(all, tf), n = bars.length;
-  const L = 44, R = 6, T = 4;
+  const L = 44, T = 4;
   const fpH = Math.round((ymax - ymin) * rowH);
   const gap = 26, accH = 70, rowsH = 76;
   const H = T + fpH + gap + accH + rowsH;
   const [ctx, W] = fit(cv, H);
+  // right gutter for price / VWAP / ref tags — never drawn over bid×ask cells
+  const labW = (t, px, bold, pad) => { font(ctx, px, bold); return ctx.measureText(t).width + pad; };
+  const vwapIn = vwap != null && vwap >= ymin && vwap <= ymax;
+  const vwapLab = vwap == null ? null : (vwapIn ? 'VWAP ' + fpx(Math.round(vwap * 10) / 10) : `VWAP ${vwap > ymax ? '↑' : '↓'} ${fpx(Math.round(vwap * 10) / 10)}`);
+  let need = 52;
+  if (price != null) need = Math.max(need, labW(fpx(price), 10, true, 14));
+  if (vwapLab) need = Math.max(need, labW(vwapLab, 9.5, true, 12));
+  for (const [y, lab] of refItems) {
+    if (y < ymin || y > ymax) continue;
+    need = Math.max(need, labW(`${lab} ${fpx(y)}`, 9.5, false, 12));
+  }
+  const R = Math.max(58, Math.min(92, Math.ceil(need + 4)));
   const pw = W - L - R;
-  const X = u => L + (u + 0.62) / (n + 1.15) * pw;
-  const unit = pw / (n + 1.15);
+  const xOff = 0.60;
+  const X = u => L + (u + xOff) / (n + 0.24) * pw;
+  const unit = pw / (n + 0.24);
   const Y = p => T + (ymax - p) / (ymax - ymin) * fpH;
   const colW = unit * 0.96;
-  const strip = Math.max(13, Math.min(18, Math.round(unit * 0.28)));
-  const cellsW = colW - strip;
+  // reserved candle gutter left of bid×ask; body is inset so it never meets the text
+  const gutter = Math.max(16, Math.min(22, Math.round(unit * 0.28)));
+  const cellsW = Math.max(8, colW - gutter);
   // frame + grid
   ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, fpH); ctx.clip();
   for (let p = Math.floor(ymin); p <= Math.ceil(ymax); p += STEP) {
     ctx.strokeStyle = p % 5 === 0 ? '#eef1f4' : '#f7f8fa'; ctx.lineWidth = p % 5 === 0 ? 0.8 : 0.5;
     ctx.beginPath(); ctx.moveTo(L, Y(p)); ctx.lineTo(L + pw, Y(p)); ctx.stroke();
   }
-  const fs = Math.max(7, Math.min(11, Math.min(rowH * 0.72, cellsW / 6.2)));
+  const fcell = v => (v == null ? '—' : String(Math.round(v)));
+  const midGap = Math.max(6, Math.min(10, cellsW * 0.16));
+  const padX = 1.5;
+  const numMaxW = Math.max(4, (cellsW - midGap) / 2 - padX);
+  let fs = Math.max(6, Math.min(11, rowH * 0.70));
+  const labels = [];
+  for (const c of bars) for (const [p, [bi, a]] of c.lv) {
+    if (p < ymin || p > ymax - 1e-9) continue;
+    labels.push(fcell(bi), fcell(a));
+  }
+  font(ctx, fs);
+  let maxLab = 0;
+  for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
+  while (fs > 6 && maxLab > numMaxW) {
+    fs -= 0.5; font(ctx, fs); maxLab = 0;
+    for (const t of labels) maxLab = Math.max(maxLab, ctx.measureText(t).width);
+  }
+  const showNums = maxLab <= numMaxW + 0.4;
+  const fsX = Math.max(5.5, Math.min(fs - 1, midGap - 1));
   bars.forEach((c, i) => {
-    const x0 = X(i - 0.48), cellsX = x0 + strip;
+    const x0 = X(i - 0.48), cellsX = x0 + gutter;
     ctx.fillStyle = '#fafbfc'; ctx.fillRect(x0, T, colW, fpH);
+    ctx.fillStyle = '#f0f2f5'; ctx.fillRect(x0, T, gutter, fpH);
     ctx.strokeStyle = '#edf0f3'; ctx.lineWidth = 0.6; ctx.strokeRect(x0, T, colW, fpH);
-    ctx.strokeStyle = '#e8eaed'; ctx.lineWidth = 0.7;
+    ctx.strokeStyle = '#e2e6ea'; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.moveTo(cellsX, T); ctx.lineTo(cellsX, T + fpH); ctx.stroke();
-    // OHLC candle immediately left of bid×ask, same price axis (replaces the old thin right-edge wick)
-    const cx = x0 + strip / 2, bodyW = Math.max(7, Math.min(12, strip - 5));
+    // OHLC candle fully inside the gutter (inset on both sides)
+    const inset = 2.5;
+    const bodyW = Math.max(8, Math.min(14, gutter - inset * 2));
+    const cx = x0 + gutter / 2;
     const ccol = c.c >= c.o ? C.green : C.red;
-    ctx.strokeStyle = ccol; ctx.lineWidth = 1.45;
+    ctx.strokeStyle = ccol; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(cx, Y(c.h)); ctx.lineTo(cx, Y(c.l)); ctx.stroke();
     let yTopB = Y(Math.max(c.o, c.c)), yBotB = Y(Math.min(c.o, c.c));
     if (yBotB - yTopB < 2) { const mid = (yTopB + yBotB) / 2; yTopB = mid - 1; yBotB = mid + 1; }
     ctx.fillStyle = ccol; ctx.fillRect(cx - bodyW / 2, yTopB, bodyW, yBotB - yTopB);
+    ctx.strokeStyle = c.c >= c.o ? '#146338' : '#9b2c22'; ctx.lineWidth = 0.8;
+    ctx.strokeRect(cx - bodyW / 2 + 0.4, yTopB + 0.4, bodyW - 0.8, yBotB - yTopB - 0.8);
+    const midX = cellsX + cellsW / 2;
+    const bidRight = midX - midGap / 2;
+    const askLeft = midX + midGap / 2;
     for (const [p, [bi, a]] of c.lv) {
       if (p < ymin || p > ymax - 1e-9) continue;
       const yTop = Y(p + 0.48), hh = rowH * 0.96, yc = Y(p);
@@ -270,10 +310,20 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
       ctx.fillStyle = sell ? C.redCell : (bi > a ? C.redSoft : C.grey); ctx.fillRect(cellsX, yTop, cellsW / 2, hh);
       ctx.fillStyle = buy ? C.greenCell : (a > bi ? C.greenSoft : C.grey); ctx.fillRect(cellsX + cellsW / 2, yTop, cellsW / 2, hh);
       ctx.globalAlpha = 1;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text; ctx.fillText(fint(bi), cellsX + cellsW * 0.23, yc);
-      font(ctx, Math.max(6, fs - 1.5)); ctx.fillStyle = '#64748b'; ctx.fillText('×', cellsX + cellsW * 0.5, yc);
-      font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text; ctx.fillText(fint(a), cellsX + cellsW * 0.77, yc);
+      if (showNums) {
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cellsX, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
+        font(ctx, fs, sell); ctx.fillStyle = sell ? C.red : C.text;
+        ctx.textAlign = 'right'; ctx.fillText(fcell(bi), bidRight, yc);
+        ctx.restore();
+        font(ctx, fsX); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('×', midX, yc);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cellsX + cellsW / 2, yTop, Math.max(0, cellsW / 2), hh); ctx.clip();
+        font(ctx, fs, buy); ctx.fillStyle = buy ? C.green : C.text;
+        ctx.textAlign = 'left'; ctx.fillText(fcell(a), askLeft, yc);
+        ctx.restore();
+      }
       if (c.poc === p) { ctx.strokeStyle = C.poc; ctx.lineWidth = 1.8; ctx.strokeRect(cellsX + 1, yTop + 1, cellsW - 2, hh - 2); }
     }
   });
@@ -297,28 +347,24 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   });
   ctx.stroke();
   ctx.setLineDash([]); ctx.restore();
-  // labels on the right (ref lines + price)
+  // labels in the right price gutter (outside bid×ask cells)
   const used = [];
-  const lx = X(n - 0.05) + 4;
+  const lx = L + pw + 3;
   if (price != null && price >= ymin && price <= ymax) {
-    font(ctx, 10.5, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
-    const px = Math.min(lx, W - tw - 1);
-    ctx.fillStyle = C.price; rrect(ctx, px, Y(price) - 9, tw, 18, 3); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, px + 6, Y(price));
+    font(ctx, 10, true); const t = fpx(price); const tw = ctx.measureText(t).width + 12;
+    ctx.fillStyle = C.price; rrect(ctx, lx, Y(price) - 9, tw, 18, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 6, Y(price));
     used.push(Y(price));
   }
-  if (vwap != null) {
-    font(ctx, 10, true);
-    const inR = vwap >= ymin && vwap <= ymax;
-    const t = inR ? 'VWAP ' + fpx(Math.round(vwap * 10) / 10) : `VWAP ${vwap > ymax ? '↑' : '↓'} ${fpx(Math.round(vwap * 10) / 10)}`;
-    const tw = ctx.measureText(t).width + 10;
-    let yy = inR ? Y(vwap) : (vwap > ymax ? T + 10 : T + fpH - 10);
+  if (vwapLab) {
+    font(ctx, 9.5, true);
+    const tw = ctx.measureText(vwapLab).width + 10;
+    let yy = vwapIn ? Y(vwap) : (vwap > ymax ? T + 10 : T + fpH - 10);
     for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
     used.push(yy);
-    const bx = Math.min(lx, W - tw - 1);
-    if (inR) { ctx.fillStyle = C.vwap; rrect(ctx, bx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.fillStyle = '#fff'; }
-    else { ctx.fillStyle = '#fff'; rrect(ctx, bx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = C.vwap; }
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
+    if (vwapIn) { ctx.fillStyle = C.vwap; rrect(ctx, lx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.fillStyle = '#fff'; }
+    else { ctx.fillStyle = '#fff'; rrect(ctx, lx, yy - 8.5, tw, 17, 3); ctx.fill(); ctx.strokeStyle = C.vwap; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = C.vwap; }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(vwapLab, lx + 5, yy);
   }
   for (const [y, lab, col] of refItems) {
     if (y < ymin || y > ymax) continue;
@@ -326,10 +372,9 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
     for (const u of used) if (Math.abs(yy - u) < 18) yy = u + (yy >= u ? 18 : -18);
     used.push(yy);
     font(ctx, 9.5); const t = `${lab} ${fpx(y)}`; const tw = ctx.measureText(t).width + 10;
-    const bx = Math.min(lx, W - tw - 1);
-    ctx.fillStyle = '#fff'; rrect(ctx, bx, yy - 8, tw, 16, 3); ctx.fill();
+    ctx.fillStyle = '#fff'; rrect(ctx, lx, yy - 8, tw, 16, 3); ctx.fill();
     ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();
-    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 5, yy);
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, lx + 5, yy);
   }
   // spine + y ticks
   ctx.strokeStyle = C.spine; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, fpH - 1);
@@ -361,7 +406,7 @@ function drawFp(cv, all, tf, ymin, ymax, price, refItems, rowH, vwap) {
   let lo = Math.min(0, ...accs), hi = Math.max(0, ...accs);
   const pad = Math.max(20, (hi - lo) * 0.18); lo -= pad; hi += pad;
   const AY = v => aT + (hi - v) / (hi - lo) * accH;
-  GEO[cv.id] = { type: 'fp', W, H, L, pw, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, xOff: 0.62, bars, all, tf };
+  GEO[cv.id] = { type: 'fp', W, H, L, pw, R, T, fpH, ymin, ymax, aT, accH, alo: lo, ahi: hi, n, unit, xOff, bars, all, tf };
   ctx.strokeStyle = C.spine; ctx.strokeRect(L + 0.5, aT + 0.5, pw - 1, accH - 1);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(L, AY(0)); ctx.lineTo(L + pw, AY(0)); ctx.stroke();
   if (n) {
@@ -573,10 +618,11 @@ function ovCtx(id) {
   const ctx = ov.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, g.W, g.H);
   return [ctx, g];
 }
-function tag(ctx, x, y, t, align, bg) {
+function tag(ctx, x, y, t, align, bg, minX) {
   font(ctx, 10, true); const tw = ctx.measureText(t).width + 8;
   let bx = align === 'right' ? x - tw : align === 'center' ? x - tw / 2 : x;
-  const cwCss = ctx.canvas.width / Math.max(1, window.devicePixelRatio || 1); bx = Math.max(0, Math.min(bx, cwCss - tw - 1));
+  const cwCss = ctx.canvas.width / Math.max(1, window.devicePixelRatio || 1);
+  bx = Math.max(minX != null ? minX : 0, Math.min(bx, cwCss - tw - 1));
   ctx.fillStyle = bg || '#334155'; rrect(ctx, bx, y - 8, tw, 16, 3); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, bx + 4, y);
 }
@@ -591,7 +637,7 @@ function drawCross() {
       const yb = g.T + g.fpH;
       if (CROSS.price != null && CROSS.price >= g.ymin && CROSS.price <= g.ymax) {
         const y = Y(CROSS.price); dash(ctx, g.L, y, g.L + g.pw, y);
-        tag(ctx, g.L - 1, y, fpx(Math.round(CROSS.price * 10) / 10), 'right');
+        tag(ctx, g.L + g.pw + 3, y, fpx(Math.round(CROSS.price * 10) / 10), 'left', null, g.L + g.pw);
       }
       if (src) {
         dash(ctx, CROSS.x, g.T, CROSS.x, g.aT + g.accH);
