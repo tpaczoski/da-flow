@@ -8,6 +8,28 @@ const CACHE = {US500: DATA};
 let MAKRO = null, MAKRO_ST = 0;   // kalendarz makro (data/makro.json), wczytywany przy pierwszym użyciu
 const mkLoad = () => { if (MAKRO_ST) return; MAKRO_ST = 1; fetch('data/makro.json').then(r => r.json()).then(j => { MAKRO = j; render(true); }).catch(() => { MAKRO = {ev: [], err: 1}; render(true); }); };
 let OPH = null, OPH_ST = 0; const ohLoad = () => { if (OPH_ST) return; OPH_ST = 1; fetch('data/opt_hist.json').then(r => r.json()).then(j => { OPH = j; render(true); }).catch(() => { OPH = {s: []}; render(true); }); };
+let OPT = null, OPT_ST = 0;   // podgląd: data/US500_opt.json (poziomy, GEX, Signals, VIX1D)
+const optLoad = () => {
+  if (OPT_ST) return;
+  OPT_ST = 1;
+  fetch('data/US500_opt.json').then(r => r.json()).then(j => { OPT = j; applyOptOverlay(); render(true); }).catch(() => { OPT = {sessions: {}, err: 1}; render(true); });
+};
+function applyOptOverlay() {
+  if (!OPT || !OPT.sessions) return;
+  const apply = (data) => {
+    if (!data) return;
+    for (const [d, rec] of Object.entries(OPT.sessions)) {
+      if (!data[d]) continue;
+      if (rec && rec.status === 'ok') {
+        if (rec.opt) data[d].opt = rec.opt;
+        if (rec.em) data[d].em = rec.em;
+        if (rec.opt0) data[d].opt0 = rec.opt0;
+      }
+    }
+  };
+  apply(typeof DATA !== 'undefined' ? DATA : null);
+  if (typeof CACHE !== 'undefined') apply(CACHE.US500);
+}
 const LOADING = {};   // inne rynki do okna zgodności
 const needInst = n => { if (CACHE[n] || LOADING[n]) return; LOADING[n] = 1; fetch(`data/${n}.json`).then(r => r.json()).then(j => { CACHE[n] = j; render(true); }).catch(() => { CACHE[n] = {}; render(true); }); };
 const mmS = t => { const [h, m] = t.split(':').map(Number); return (h * 60 + m - 23 * 60 + 1440) % 1440; };   // minuty od początku sesji DA (ok. 23:00)
@@ -27,6 +49,12 @@ let FIRST_VISIT = true;
 try { const raw = localStorage.getItem('fp-us500'); if (raw) FIRST_VISIT = false; const s = JSON.parse(raw || '{}'); Object.assign(S, s); } catch (e) {}
 if (/(?:^|[?&])hvn=1(?:&|$)/.test(location.search)) S.hvw = true;
 if (/(?:^|[?&])cta=1(?:&|$)/.test(location.search)) S.ctw = true;
+if (/(?:^|[?&])opcje=1(?:&|$)/.test(location.search)) { S.gxm = true; S.sig = true; }
+if (/(?:^|[?&])compact=1(?:&|$)/.test(location.search)) S.ctrlOpen = false;
+{ const md = location.search.match(/(?:^|[?&])day=(\d{4}-\d{2}-\d{2})/); if (md) S.day = md[1]; }
+if (S.gxm === undefined) S.gxm = true;
+if (S.sig === undefined) S.sig = true;
+optLoad();
 var HVN = null, HVN_ST = 0;
 var CTA = null, CTA_ST = 0;
 if (!S.pf || typeof S.pf !== 'object') S.pf = {pre: false, rth: false, day: true};
@@ -38,6 +66,8 @@ $('showREF').onchange = e => { S.ref = e.target.checked; save(); render(true); }
 $('showNK').onchange = e => { S.naked = e.target.checked; save(); render(true); };
 $('showOPT').onchange = e => { S.opt = e.target.checked; save(); render(true); };
 $('showATR').onchange = e => { S.atr = e.target.checked; save(); render(true); };
+if ($('showGXM')) $('showGXM').onchange = e => { S.gxm = e.target.checked; save(); render(true); };
+if ($('showSIG')) $('showSIG').onchange = e => { S.sig = e.target.checked; save(); render(true); };
 $('showST').onchange = e => { S.st = e.target.checked; save(); render(true); };
 $('showSUM').onchange = e => { S.sumOn = e.target.checked; save(); $('sum').hidden = !S.sumOn; };
 $('showLEG').onchange = e => { S.legOn = e.target.checked; save(); $('legBox').hidden = !S.legOn; };
@@ -199,7 +229,7 @@ function atr5(day) {                 // średni true range sesji kasowej z 5 pop
 }
 function extraLevels(rthOnly) {        // EM i ATR bieżącego dnia – żeby zmieściły się na wykresie i profilu
   const D = DATA[S.day], out = [];
-  if (S.opt && D.opt) for (const v of [D.opt.emH, D.opt.emL]) if (v != null) out.push(v);
+  if (S.opt && D.opt) for (const v of [D.opt.emH, D.opt.emL, D.opt.cw, D.opt.pw, D.opt.flip, D.opt.gmin, D.opt.gmax, D.opt.mp]) if (v != null) out.push(v);
   if (S.atr) { const a = atr5(S.day), b = D.boxes.filter(x => x[9]); if (a && b.length) { const hh = Math.max(...b.map(x => x[2])), ll = Math.min(...b.map(x => x[3])); out.push(ll + a.atr, hh - a.atr); } }
   return out;
 }
@@ -432,10 +462,82 @@ function nightOf(DT, day) {
   if (from == null && boxes.length) from = boxes[0][0];
   return boxes.length ? {boxes, cells, from, n0, prev: n0 > 0} : null;
 }
+
+function optRec(day) {
+  return (OPT && OPT.sessions && OPT.sessions[day || (typeof S !== 'undefined' ? S.day : null)]) || null;
+}
+function drawOptSig() {
+  const el = $('optSig');
+  if (!el) return;
+  const on = S.sig !== false && INST === 'US500';
+  el.hidden = !on;
+  if (!on) return;
+  if (!OPT) { el.innerHTML = '<div class="osmiss">Wczytywanie poziomów opcji…</div>'; return; }
+  const rec = optRec(S.day);
+  if (!rec || rec.status !== 'ok') {
+    const why = (rec && rec.reason) ? rec.reason : (OPT.err ? 'nie udało się wczytać data/US500_opt.json' : 'brak wpisu opcji dla tej sesji');
+    el.innerHTML = `<div class="osmiss"><b>Brak łańcucha SPX</b> — ${why}${/[.!?]$/.test(String(why).trim()) ? '' : '.'} Nie pokazuję starych liczb z poprzedniej sesji. Heatmapa i poziomy opcji są wyłączone.</div>`;
+    return;
+  }
+  const s = rec.signals || {}, vt = s.vix_term || rec.vix_term || {}, sk = s.skew || rec.skew || {};
+  const edge = (v, e) => v == null ? 'brak w oknie' : (e ? `${v} · krawędź okna` : `${v}`);
+  const escTip = (s) => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const chip = (lab, val, sub, cls, tip) => `<div class="oschip${cls ? ' ' + cls : ''}"${tip ? ` title="${escTip(tip)}"` : ''}><span>${lab}</span><b>${val}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+  const flipCls = s.flip_missing ? 'miss' : '';
+  const skTxt = sk.status === 'ok' && sk.rr25 != null ? (sk.rr25 > 0 ? '+' : '') + sk.rr25 : 'poza oknem';
+  const skCls = sk.status === 'ok' ? (sk.rr25 >= 0 ? 'neg' : 'pos') : 'miss';
+  const ratio = vt.ratio != null ? vt.ratio.toFixed(2) : '–';
+  const struct = vt.structure || 'brak';
+  const vixLine = (vt.vix1d != null || vt.vix != null) ? `VIX1D ${vt.vix1d ?? '–'} / VIX ${vt.vix ?? '–'} · ${struct}` : 'brak VIX1D';
+  el.innerHTML = [
+    chip('SPOT', s.spot ?? '–', s.spot_src || '', ''),
+    chip('EM ±', s.em != null ? s.em : '–', s.emL != null ? `${s.emL} – ${s.emH}` : '', ''),
+    chip('PAIN', s.max_pain ?? '–', s.max_pain_edge ? 'krawędź okna' : 'max pain (w oknie)', s.max_pain_edge ? 'warn' : ''),
+    chip('FLIP', s.flip_missing ? 'brak w oknie' : (s.flip ?? '–'), 'zero net GEX', s.flip_missing ? 'miss' : flipCls),
+    chip('CALL', edge(s.call_wall, s.call_wall_edge), s.call_wall_note || 'ściana OI, K≥spot', s.call_wall_edge ? 'warn' : '', s.call_wall_tip || s.call_wall_note),
+    chip('PUT', edge(s.put_wall, s.put_wall_edge), s.put_wall_note || 'ściana OI, K≤spot', s.put_wall_edge ? 'warn' : '', s.put_wall_tip || s.put_wall_note),
+    chip('P/C', s.pcr_oi != null ? s.pcr_oi : '–', s.pcr_vol != null ? `OI · wol. ${s.pcr_vol}` : 'OI w oknie', ''),
+    chip('CZAS', s.tte || '–', s.asof ? `zrzut ${s.asof}` : '', ''),
+    chip('SKEW', skTxt, 'RR 25Δ (okno)', skCls),
+    chip('VIX1D', ratio, vixLine + (vt.regime && vt.regime !== 'brak' ? ' · ' + vt.regime : ''), struct === 'backwardation' ? 'neg' : (struct === 'contango' ? 'pos' : '')),
+    `<div class="osnote">${s.window_note || OPT.window_note || ''} Podgląd, nie sygnał.</div>`
+  ].join('');
+}
+function gexHeatSVG(y, lo, hi, W) {
+  const rec = optRec(S.day);
+  if (S.gxm === false || INST !== 'US500' || !rec || rec.status !== 'ok' || !rec.gex_curve) return {heat: [], curve: []};
+  const g = rec.gex_curve.gexk_us || [];
+  if (g.length < 2) return {heat: [], curve: []};
+  const mx = Math.max(1e-9, ...g.map(q => Math.abs(q[1])));
+  const heat = [], curve = [];
+  const note = rec.gex_curve.note || rec.gex_curve.lab || 'net GEX, okno ~115 pkt';
+  for (let i = 0; i < g.length; i++) {
+    const k = g[i][0], v = g[i][1];
+    const k0 = i === 0 ? k - 2.5 : (g[i - 1][0] + k) / 2;
+    const k1 = i === g.length - 1 ? k + 2.5 : (k + g[i + 1][0]) / 2;
+    if (k1 < lo || k0 > hi) continue;
+    const yy0 = y(Math.min(hi, Math.max(lo, k1))), yy1 = y(Math.max(lo, Math.min(hi, k0)));
+    const hgt = Math.max(0, yy1 - yy0);
+    if (hgt <= 0) continue;
+    const col = v >= 0 ? '47,160,80' : '200,70,60';
+    const op = (0.07 + 0.32 * Math.min(1, Math.abs(v) / mx)).toFixed(3);
+    heat.push(`<rect x="0" y="${yy0}" width="${W}" height="${hgt}" fill="rgb(${col})" opacity="${op}"><title>GEX net ${k}: ${v >= 0 ? '+' : ''}${v.toFixed(2)} · ${note}</title></rect>`);
+  }
+  // krzywa po prawej: 0 na x = W-86, dodatni w prawo, ujemny w lewo, w pasie 72 px
+  const x0 = W - 86, amp = 32;
+  const pts = g.filter(q => q[0] >= lo && q[0] <= hi).map(q => `${x0 + (q[1] / mx) * amp},${y(q[0])}`);
+  if (pts.length >= 2) {
+    curve.push(`<line x1="${x0}" x2="${x0}" y1="${y(hi)}" y2="${y(lo)}" stroke="currentColor" stroke-width="0.6" opacity=".35"/>`);
+    curve.push(`<path d="M${pts.join('L')}" fill="none" stroke="${css('--opt')}" stroke-width="1.8" opacity=".9"/>`);
+    curve.push(`<text x="${x0 + 4}" y="${y(hi) + 11}" font-size="9" font-weight="700" fill="${css('--opt')}" paint-order="stroke" stroke="${css('--panel')}" stroke-width="3">γ krzywa · okno ~115 pkt</text>`);
+  }
+  return {heat, curve};
+}
+
 function render(keep) {
   applyMode();
   document.querySelectorAll('.seg:not(#theme)').forEach(s => s.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v == S[{tf: 'tf', rng: 'rng', bin: 'bin', vwm: 'vw'}[s.id]]))));
-  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showCTW').checked = !!S.ctw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
+  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; if ($('showGXM')) $('showGXM').checked = S.gxm !== false; if ($('showSIG')) $('showSIG').checked = S.sig !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showCTW').checked = !!S.ctw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
   drawHvnWin();
   drawCtaWin();
   markPreset();
@@ -693,14 +795,16 @@ function render(keep) {
       else { const u = ATRB.used, col = u == null ? 'var(--mut)' : u >= 100 ? 'var(--sell)' : u >= 70 ? 'var(--va)' : 'var(--buy)', f1 = v => PXF(v).replace('.', ',');
         el.innerHTML = `<span class="atrb" title="ATR 5 dni z sesji kasowych (${ATRB.n} sesji): ${f1(ATRB.atr)} pkt${u != null ? ` · zakres sesji kasowej w widoku ${f1(ATRB.rng)} pkt (${f1(ATRB.ll)}–${f1(ATRB.hh)}) = ${u.toFixed(0)}% ATR${u >= 100 ? ' – dzienny zakres już przekroczony' : ` · zostało ok. ${f1(ATRB.atr - ATRB.rng)} pkt do pełnego ATR`}` : ' · brak świec sesji kasowej w widoku'}">ATR5 <strong>${f1(ATRB.atr)}</strong> <span class="atrbar"><i style="width:${Math.min(u || 0, 100)}%;background:${col}"></i>${u > 100 ? `<i class="over" style="background:${col}"></i>` : ''}</span> <strong style="color:${col}">${u == null ? '–' : u.toFixed(0) + '%'}</strong></span>`; } } }
   const O_ = DATA[S.day].opt; let optTxt = '';
-  if (S.opt) {
+  const _orec = optRec(S.day);
+  if (_orec && _orec.status && _orec.status !== 'ok') { if (INST === 'US500') optTxt = `<span>Opcje DN: brak łańcucha SPX — ${_orec.reason || 'brak danych'}</span>`; }
+  else if (S.opt) {
     if (O_) { 
-      for (const [v, st, lab] of [[O_.emH, '', `EM +${O_.em}`], [O_.emL, '', `EM −${O_.em}`], [O_.F, '1 3', 'środek EM'], [O_.cw, '7 3', 'ściana calli'], [O_.pw, '7 3', 'ściana putów'], [O_.flip, '2 2', 'flip GEX'], [O_.gmin, '4 2 1 2', 'najgłębszy GEX']]) if (v != null) LEV.push([v, C.opt, st, `${lab} ${v.toFixed(0)}`, 'R']);
+      for (const [v, st, lab] of [[O_.emH, '', `EM +${O_.em}`], [O_.emL, '', `EM −${O_.em}`], [O_.F, '1 3', 'środek EM'], [O_.cw, '7 3', 'ściana calli'], [O_.pw, '7 3', 'ściana putów'], [O_.flip, '2 2', 'flip GEX'], [O_.gmin, '4 2 1 2', 'najgłębszy GEX'], [O_.gmax, '4 2 1 2', 'max GEX'], [O_.mp, '1 3', 'max pain']]) if (v != null) LEV.push([v, C.opt, st, `${lab} ${v.toFixed(0)}`, 'R']);
       // v1.3 linie zabezpieczeń animatorów (tools/hedge_lines.py): ruch o ± EM 1 DTE z każdej ceny startowej; konwencja pozycji jak w GEX (założenie)
       if (O_.asym != null) LEV.push([O_.asym, C.sell, '6 2 1 2', `linia asymetrii ${O_.asym.toFixed(0)} – pod nią spadek o EM dobijany sprzedażą animatorów`, 'R']);
       if (O_.sqz != null) LEV.push([O_.sqz, C.buy, '6 2 1 2', `linia squeeze ${O_.sqz.toFixed(0)} – pod nią wzrost o EM podbijany kupnem animatorów`, 'R']);
       const off = [O_.emH, O_.emL, O_.cw, O_.pw, O_.flip].filter(v => v != null && (v > hi || v < lo)).length;
-      optTxt = `<span>Opcje DN (zrzut ${O_.snap}${O_.gex != null ? `, GEX ${O_.gex > 0 ? '+' : ''}${O_.gex} mld $` : ' – EM z łańcucha, bez GEX i ścian'})${off ? `: ${off} poziomów poza zakresem wykresu` : ''}</span>`;
+      optTxt = `<span>Opcje DN (zrzut ${O_.snap}${O_.window ? `, okno ~115 pkt` : ''}${O_.gex != null ? `, net GEX ${O_.gex > 0 ? '+' : ''}${O_.gex} (jednostki łańcucha, tylko okno)` : (O_.window ? '' : ' – EM z łańcucha, bez GEX i ścian')})${off ? `: ${off} poziomów poza zakresem wykresu` : ''}${O_.window_note ? ` · ${O_.window_note}` : ''}</span>`;
       if (O_.hl) { const h = O_.hl, f2 = v => (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ','), zone = LP_ => O_.asym == null ? '' : LP_ < (O_.sqz ?? -1e9) ? 'pod linią squeeze: spadki dobijane, wzrosty podbijane – ruchy się wydłużają' : LP_ < O_.asym ? 'między liniami: spadki dobijane, wzrosty gaszone' : 'nad linią asymetrii: spadki i wzrosty gaszone (dodatnia gamma)';
         optTxt += `<span title="Ile SPX musieliby kupić (+) / sprzedać (−) animatorzy, gdyby cena przeszła ± EM 1 DTE (${h.m} pkt) od środka ${(h.F + h.base).toFixed(0)}: spadek ${f2(h.f_dn)} mld $, wzrost ${f2(h.f_up)} mld $. Linia asymetrii = cena startowa, pod którą przy spadku animatorzy sprzedają (dobijają); linia squeeze = pod którą przy wzroście kupują (podbijają). Konwencja pozycji jak w GEX (kupione calle, sprzedane puty) – założenie. Status: opis, test na historii Option Edge.">Zabezpieczenia animatorów: asymetria <b style="color:${C.sell}">${O_.asym != null ? O_.asym.toFixed(0) : '–'}</b> · squeeze <b style="color:${C.buy}">${O_.sqz != null ? O_.sqz.toFixed(0) : '–'}</b> · cena ${zone(cols[cols.length - 1].C)} <span class="st stk">opis</span></span>`; } }
     else optTxt = DATA[S.day].opt0 ? '' : INST === 'US500' ? '<span>Opcje DN: brak zrzutu łańcucha SPX dla tej sesji</span>' : '<span>Opcje DN: tylko dla US500</span>';
@@ -1263,7 +1367,9 @@ function render(keep) {
   { const st = document.getElementById('liveSt'); if (st) { const net = navigator.onLine; st.innerHTML = `<i class="dot ${net ? 'off' : 'down'}"></i>${net ? 'offline – dane z eksportu DA' : 'brak sieci'}`; st.title = 'Strona nie ma bieżącego zasilania danymi: pokazuje wbudowane eksporty flex/M1 z Delta Analyzera. Ostatnia świeca: ' + LT; } }
   o.push(`<line x1="0" x2="${W}" y1="${y(LP)}" y2="${y(LP)}" stroke="${C.ink}" stroke-width="1" stroke-dasharray="2 3" opacity=".8"/>`);
   const clip = `<clipPath id="plotclip"><rect x="0" y="${HEAD}" width="${W}" height="${H}"/></clipPath>`;
-  o.unshift(defs, clip, '<g clip-path="url(#plotclip)" shape-rendering="crispEdges">', ...ou, ...on, '</g>'); o.push('<g clip-path="url(#plotclip)">', ...ov, '</g>');
+  const GX = (S.gxm !== false && INST === 'US500' && optRec(S.day) && optRec(S.day).status === 'ok') ? gexHeatSVG(y, lo, hi, W) : {heat: [], curve: []};
+  o.unshift(defs, clip, '<g clip-path="url(#plotclip)" shape-rendering="crispEdges">', ...GX.heat, ...ou, ...on, '</g>'); o.push('<g clip-path="url(#plotclip)">', ...ov, ...GX.curve, '</g>');
+  try { drawOptSig(); } catch (e) { const el = $('optSig'); if (el) { el.hidden = false; el.innerHTML = '<div class="osmiss">Pasek Signals nie narysował się.</div>'; } }
   o.push(`<g id="lvlab">${olab.join('')}</g>`);
   const fp = $('fp'); fp.setAttribute('width', W); fp.setAttribute('height', HEAD + H + FOOT); fp.setAttribute('viewBox', `0 0 ${W} ${HEAD + H + FOOT}`); fp.innerHTML = o.join('');
   const ax = [], AW = 64;

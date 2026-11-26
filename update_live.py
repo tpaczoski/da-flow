@@ -35,6 +35,10 @@ CTA_JSON = SITE / "data" / "US500_cta.json"
 CTA_BUILD = SITE / "build_cta_json.py"
 CTA_MAX_SEC = 10
 CTA_MIN_AGE = 3600
+OPT_JSON = SITE / "data" / "US500_opt.json"
+OPT_BUILD = SITE / "build_opt_levels.py"
+OPT_MAX_SEC = 10
+OPT_MIN_AGE = 3600
 REPO = "https://github.com/tpaczoski/da-flow.git"
 REMOTE = "https://x-access-token@github.com/tpaczoski/da-flow.git"
 PACK_DIRS = [
@@ -217,6 +221,46 @@ def maybe_refresh_cta(now_local: datetime) -> bool:
     return changed
 
 
+def maybe_refresh_opt(now_local: datetime) -> bool:
+    """Odśwież data/US500_opt.json najwyżej raz na godzinę (budżet 10 s).
+
+    Błąd lub przekroczenie czasu nie przerywa odświeżenia live.
+    """
+    if not OPT_BUILD.is_file():
+        print("update_live: brak build_opt_levels.py, pomijam opcje")
+        return False
+    if OPT_JSON.is_file():
+        age = time.time() - OPT_JSON.stat().st_mtime
+        if age < OPT_MIN_AGE:
+            print(f"update_live: opcje świeże ({int(age)} s), pomijam przebudowę")
+            return False
+    before = OPT_JSON.read_bytes() if OPT_JSON.is_file() else b""
+    try:
+        r = subprocess.run(
+            [sys.executable, str(OPT_BUILD)],
+            cwd=str(SITE),
+            capture_output=True,
+            text=True,
+            timeout=OPT_MAX_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        print("update_live: budowa poziomów opcji przekroczyła 10 s – pomijam, live bez zmian w tym pliku")
+        return False
+    except Exception as e:
+        print(f"update_live: budowa poziomów opcji nie wystartowała ({e})")
+        return False
+    tail = redact(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-1] if ((r.stdout or "") + (r.stderr or "")).strip() else "")
+    if r.returncode != 0:
+        print(f"update_live: budowa poziomów opcji nie powiodła się (exit {r.returncode}): {tail}")
+        return False
+    after = OPT_JSON.read_bytes() if OPT_JSON.is_file() else b""
+    changed = after != before
+    print("update_live: opcje " + ("zaktualizowane" if changed else "przebudowane, bez zmian w pliku") + (f" ({tail})" if tail else ""))
+    return changed
+
+
+
+
 def write_json(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -242,8 +286,8 @@ def redact(s: str) -> str:
     return s
 
 
-def git_push_live(now_local: datetime, paths: list[str] | None = None) -> None:
-    """Commit i push plików live (US500_live.json i ewentualnie US500_day.json)."""
+def git_push_live(now_local: datetime, paths: list[str] | None = None, msg: str | None = None) -> None:
+    """Commit i push wskazanych plików na main (domyślnie live/US500_live.json)."""
     if not (SITE / ".git").is_dir():
         print("update_live: brak repozytorium git, pomijam push")
         return
@@ -274,7 +318,7 @@ def git_push_live(now_local: datetime, paths: list[str] | None = None) -> None:
         print("update_live: bez zmian, pomijam push")
         return
 
-    msg = f"live US500 {now_local:%H:%M}"
+    msg = msg or f"live US500 {now_local:%H:%M}"
     run(["git", "commit", "-m", msg])
 
     tok = os.environ.get("GITHUB_DAFLOW_TOKEN")
@@ -746,6 +790,7 @@ def main() -> None:
         day_changed = write_today_day(live_d, bars, updated, now)
         hvn_changed = maybe_refresh_hvn_lvn(now)
         cta_changed = maybe_refresh_cta(now)
+        opt_changed = maybe_refresh_opt(now)
         rels = []
         if live_changed:
             rels.append("live/US500_live.json")
@@ -755,6 +800,10 @@ def main() -> None:
             rels.append("data/US500_hvn_lvn.json")
         if cta_changed:
             rels.append("data/US500_cta.json")
+        if opt_changed:
+            rels.append("data/US500_opt.json")
+            if (SITE / "data" / "opt_hist.json").is_file():
+                rels.append("data/opt_hist.json")
         if not rels:
             print("update_live: bez zmian, pomijam push")
             return
