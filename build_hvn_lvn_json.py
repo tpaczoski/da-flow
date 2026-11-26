@@ -49,7 +49,7 @@ def _session_today():
     return now, d
 
 
-def main() -> int:
+def build_obj() -> dict:
     lib = Path(os.environ.get("HVN_LIB") or LIB_DEFAULT)
     out = Path(os.environ.get("HVN_OUT") or OUT_DEFAULT)
     if not (lib / "build_heatmap.py").is_file():
@@ -245,18 +245,29 @@ def main() -> int:
         "profile": profile,
         "profile_open": profile_open,
     }
+    return obj
 
+
+def write_obj(obj: dict, out: Path | None = None) -> Path:
+    out = Path(out) if out is not None else Path(os.environ.get("HVN_OUT") or OUT_DEFAULT)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(out.suffix + ".tmp")
     tmp.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     tmp.replace(out)
-    size = out.stat().st_size
-    H.log(
-        f"Zapisano {out}  ({size} B, {counts['godzin']} godz., "
-        f"niezmitygowane HVN={counts['niezmitygowane_hvn']} "
-        f"LVN={counts['niezmitygowane_lvn']}, "
-        f"cena {last_price:.1f} @ {last_ts.astimezone(H.WAW):%d.%m %H:%M %Z})"
+    c = obj.get("counts") or {}
+    print(
+        f"Zapisano {out}  ({out.stat().st_size} B, {c.get('godzin', '?')} godz., "
+        f"niezmitygowane HVN={c.get('niezmitygowane_hvn', '?')} "
+        f"LVN={c.get('niezmitygowane_lvn', '?')}, "
+        f"cena {obj.get('last_price')} @ {obj.get('last_ts')})",
+        flush=True,
     )
+    return out
+
+
+def main() -> int:
+    obj = build_obj()
+    write_obj(obj)
     return 0
 
 

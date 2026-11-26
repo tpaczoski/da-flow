@@ -3,8 +3,9 @@ Pozostałe instrumenty (data/<INST>.json), kalendarz (data/makro.json), archiwum
 są wczytywane obok strony – przy publikacji trzeba je dołączyć jako pliki."""
 import os
 h = open('head.html', encoding='utf-8').read(); bd = open('body.html', encoding='utf-8').read(); s = open('app.js', encoding='utf-8').read(); d = open('data/US500.json', encoding='utf-8').read()
-dc = open('data/dclose.json', encoding='utf-8').read() if os.path.exists('data/dclose.json') else '{}'   # v1.7 zamknięcia dzienne do MA10/MA20 (tools/daily_closes.py)
-page = h + bd + '<script id="data" type="application/json">' + d + '</script>\n<script id="dclose" type="application/json">' + dc + '</script>\n<script>\n' + s + '</script>\n'
+dc = open('data/dclose.json', encoding='utf-8').read() if os.path.exists('data/dclose.json') else '{}'
+cta = open('data/US500_cta.json', encoding='utf-8').read() if os.path.exists('data/US500_cta.json') else '{}'   # v1.7 zamknięcia dzienne do MA10/MA20 (tools/daily_closes.py)
+page = h + bd + '<script id="data" type="application/json">' + d + '</script>\n<script id="dclose" type="application/json">' + dc + '</script>\n<script id="cta" type="application/json">' + cta + '</script>\n<script>\n' + s + '</script>\n'
 open('footprint_us500.html', 'w', encoding='utf-8').write(page)
 # v1.9 wersja publiczna: tryb Nauka zablokowany (przełącznik ukryty, warstwy laboratoryjne wyłączone)
 open('footprint_nauka.html', 'w', encoding='utf-8').write(page.replace('<title>DA Flow v1</title>', '<title>DA Flow Nauka</title>', 1).replace('<script>\n' + s, "<script>window.DAF_LOCK='nauka';</script>\n<script>\n" + s, 1))

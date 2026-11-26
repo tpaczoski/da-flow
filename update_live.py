@@ -31,6 +31,10 @@ HVN_JSON = SITE / "data" / "US500_hvn_lvn.json"
 HVN_BUILD = SITE / "build_hvn_lvn_json.py"
 HVN_MAX_SEC = 10
 HVN_MIN_AGE = 3600  # raz na godzinę
+CTA_JSON = SITE / "data" / "US500_cta.json"
+CTA_BUILD = SITE / "build_cta_json.py"
+CTA_MAX_SEC = 10
+CTA_MIN_AGE = 3600
 REPO = "https://github.com/tpaczoski/da-flow.git"
 REMOTE = "https://x-access-token@github.com/tpaczoski/da-flow.git"
 PACK_DIRS = [
@@ -172,6 +176,44 @@ def maybe_refresh_hvn_lvn(now_local: datetime) -> bool:
     after = HVN_JSON.read_bytes() if HVN_JSON.is_file() else b""
     changed = after != before
     print("update_live: HVN/LVN " + ("zaktualizowane" if changed else "przebudowane, bez zmian w pliku") + (f" ({tail})" if tail else ""))
+    return changed
+
+
+def maybe_refresh_cta(now_local: datetime) -> bool:
+    """Odśwież data/US500_cta.json najwyżej raz na godzinę (budżet 10 s).
+
+    Błąd lub przekroczenie czasu nie przerywa odświeżenia live.
+    """
+    if not CTA_BUILD.is_file():
+        print("update_live: brak build_cta_json.py, pomijam CTA")
+        return False
+    if CTA_JSON.is_file():
+        age = time.time() - CTA_JSON.stat().st_mtime
+        if age < CTA_MIN_AGE:
+            print(f"update_live: CTA świeże ({int(age)} s), pomijam przebudowę")
+            return False
+    before = CTA_JSON.read_bytes() if CTA_JSON.is_file() else b""
+    try:
+        r = subprocess.run(
+            [sys.executable, str(CTA_BUILD)],
+            cwd=str(SITE),
+            capture_output=True,
+            text=True,
+            timeout=CTA_MAX_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        print("update_live: budowa CTA przekroczyła 10 s – pomijam, live bez zmian w tym pliku")
+        return False
+    except Exception as e:
+        print(f"update_live: budowa CTA nie wystartowała ({e})")
+        return False
+    tail = redact(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-1] if ((r.stdout or "") + (r.stderr or "")).strip() else "")
+    if r.returncode != 0:
+        print(f"update_live: budowa CTA nie powiodła się (exit {r.returncode}): {tail}")
+        return False
+    after = CTA_JSON.read_bytes() if CTA_JSON.is_file() else b""
+    changed = after != before
+    print("update_live: CTA " + ("zaktualizowane" if changed else "przebudowane, bez zmian w pliku") + (f" ({tail})" if tail else ""))
     return changed
 
 
@@ -703,6 +745,7 @@ def main() -> None:
 
         day_changed = write_today_day(live_d, bars, updated, now)
         hvn_changed = maybe_refresh_hvn_lvn(now)
+        cta_changed = maybe_refresh_cta(now)
         rels = []
         if live_changed:
             rels.append("live/US500_live.json")
@@ -710,6 +753,8 @@ def main() -> None:
             rels.append("live/US500_day.json")
         if hvn_changed:
             rels.append("data/US500_hvn_lvn.json")
+        if cta_changed:
+            rels.append("data/US500_cta.json")
         if not rels:
             print("update_live: bez zmian, pomijam push")
             return

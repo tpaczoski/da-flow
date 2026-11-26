@@ -14,6 +14,8 @@ const mmS = t => { const [h, m] = t.split(':').map(Number); return (h * 60 + m -
 // motyw: System / Jasny / Ciemny (atrybut data-theme na <html>)
 (function () {
   let th = 'system'; try { th = localStorage.getItem('fp-us500-theme') || 'system'; } catch (e) {}
+  if (/(?:^|[?&])theme=dark(?:&|$)/.test(location.search)) th = 'dark';
+  if (/(?:^|[?&])theme=light(?:&|$)/.test(location.search)) th = 'light';
   const apply = v => { if (v === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', v);
     document.querySelectorAll('#theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); };
   apply(th);
@@ -24,7 +26,9 @@ const S = {day: null, tf: 'M5', rng: 'rth', bin: 1, va: true, z: true, nodes: tr
 let FIRST_VISIT = true;
 try { const raw = localStorage.getItem('fp-us500'); if (raw) FIRST_VISIT = false; const s = JSON.parse(raw || '{}'); Object.assign(S, s); } catch (e) {}
 if (/(?:^|[?&])hvn=1(?:&|$)/.test(location.search)) S.hvw = true;
+if (/(?:^|[?&])cta=1(?:&|$)/.test(location.search)) S.ctw = true;
 var HVN = null, HVN_ST = 0;
+var CTA = null, CTA_ST = 0;
 if (!S.pf || typeof S.pf !== 'object') S.pf = {pre: false, rth: false, day: true};
 if (!S.cell || typeof S.cell !== 'object') S.cell = {ba: true, v: true, d: true};
 for (const k of ['ba', 'v', 'd']) $('cell_' + k).onchange = e => { S.cell[k] = e.target.checked; save(); render(true); };
@@ -61,6 +65,8 @@ $('showKRW').onchange = e => { S.krw = e.target.checked; save(); render(true); }
 $('krWinX').onclick = () => { S.krw = false; save(); render(true); };
 $('showHVW').onchange = e => { S.hvw = e.target.checked; save(); render(true); };
 $('hvWinX').onclick = () => { S.hvw = false; save(); render(true); };
+$('showCTW').onchange = e => { S.ctw = e.target.checked; save(); render(true); };
+$('ctWinX').onclick = () => { S.ctw = false; save(); render(true); };
 $('showLNW').onchange = e => { S.lnw = e.target.checked; save(); render(true); };
 $('lnWinX').onclick = () => { S.lnw = false; save(); render(true); };
 $('showMKW').onchange = e => { S.mkw = e.target.checked; save(); render(true); };
@@ -88,7 +94,7 @@ const dragWin = (wid, hid, xid, key) => { // przeciąganie pływających okien (
   h.addEventListener('pointermove', e => { if (!d) return; S[key] = {x: e.clientX - d.dx, y: e.clientY - d.dy}; place(); });
   h.addEventListener('pointerup', () => { if (d) { d = null; save(); } });
 };
-dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos'); dragWin('hvWin', 'hvWinH', 'hvWinX', 'hvwPos');
+dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos'); dragWin('hvWin', 'hvWinH', 'hvWinX', 'hvwPos'); dragWin('ctWin', 'ctWinH', 'ctWinX', 'ctwPos');
 $('pfTreeV').onchange = e => { S.treeV = e.target.checked; save(); render(true); };
 // odtwarzanie (replay)
 let RPN_MAX = 0, RP_T = null;
@@ -429,8 +435,9 @@ function nightOf(DT, day) {
 function render(keep) {
   applyMode();
   document.querySelectorAll('.seg:not(#theme)').forEach(s => s.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v == S[{tf: 'tf', rng: 'rng', bin: 'bin', vwm: 'vw'}[s.id]]))));
-  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
+  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showCTW').checked = !!S.ctw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
   drawHvnWin();
+  drawCtaWin();
   markPreset();
   $('rpBar').hidden = !S.rp; $('rpOn').setAttribute('aria-pressed', String(!!S.rp)); $('rpOn').textContent = S.rp ? '■ zakończ odtwarzanie' : '▶ Odtwarzanie';
   $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showVX').checked = S.vx !== false; $('vxInv').checked = S.vxInv !== false; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
@@ -2357,4 +2364,238 @@ function paintHvnWin(){
   };
   cH.onmouseleave = () => { tip.style.display = 'none'; };
 }
-addEventListener('resize', () => { if (S.hvw && HVN && !HVN.err) paintHvnWin(); });
+addEventListener('resize', () => { if (S.hvw && HVN && !HVN.err) paintHvnWin(); if (S.ctw && CTA && !CTA.err) paintCtaWin(); });
+
+function ctaLoad(){
+  if (CTA_ST) return;
+  CTA_ST = 1;
+  const apply = j => { CTA = j; if (S.ctw) drawCtaWin(); };
+  const fromEmbed = () => {
+    try {
+      const el = document.getElementById('cta');
+      if (el && el.textContent && el.textContent.trim() && el.textContent.trim() !== '{}') return JSON.parse(el.textContent);
+    } catch (e) {}
+    return null;
+  };
+  fetch('data/US500_cta.json?t=' + Date.now(), {cache: 'no-store'})
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(apply)
+    .catch(() => {
+      const j = fromEmbed();
+      if (j) apply(j);
+      else { CTA = {err: 1}; if (S.ctw) drawCtaWin(); }
+    });
+}
+function ctaNum(v, d){
+  if (v == null || !isFinite(v)) return '–';
+  return Number(v).toLocaleString('pl-PL', {minimumFractionDigits: d, maximumFractionDigits: d});
+}
+function ctaSigned(v, d){
+  if (v == null || !isFinite(v)) return '–';
+  const s = v > 0 ? '+' : (v < 0 ? '−' : '');
+  return s + Math.abs(v).toLocaleString('pl-PL', {minimumFractionDigits: d, maximumFractionDigits: d});
+}
+function ctaCls(v){ return v > 0 ? 'ctpos' : (v < 0 ? 'ctneg' : ''); }
+function drawCtaWin(){
+  const box = $('ctWin'); if (!box) return;
+  box.hidden = !S.ctw;
+  if (!S.ctw) return;
+  if (!CTA) { ctaLoad(); $('ctWinPx').textContent = 'wczytywanie…'; $('ctWinB').innerHTML = '<p class="ctnote">Wczytywanie data/US500_cta.json…</p>'; return; }
+  if (CTA.err) { $('ctWinPx').textContent = 'brak danych'; $('ctWinB').innerHTML = '<p class="ctnote">Nie udało się wczytać data/US500_cta.json.</p>'; return; }
+  const D = CTA, tr = D.trend || {}, vo = D.vol || {}, fl = D.flow || {}, sm = D.summary || {}, src = D.sources || {};
+  const fd = d => d ? `${String(d).slice(8,10)}.${String(d).slice(5,7)}.${String(d).slice(0,4)}` : '';
+  const badge = D.sesja_niepelna ? '<span class="ctbadge">sesja niepełna</span>' : '';
+  $('ctWinPx').innerHTML = `${fd(src.us500_local && src.us500_local.from)}–${fd(D.session)} · cena ${ctaNum(D.price, 2)} · ${D.price_ts_pl || D.asof_pl || ''} PL${badge}`;
+  const lab = sm.label || '—';
+  const kind = /kupowania/.test(lab) ? 'ctbuy' : (/sprzedawania/.test(lab) ? 'ctsell' : 'ctneu');
+  const smaRows = [20, 50, 100, 200].map(n => {
+    const r = (tr.sma || {})[n] || (tr.sma || {})[String(n)] || {};
+    if (!r.ok) return `<tr><td>SMA ${n}</td><td colspan="4" class="ctmut">za mało sesji</td></tr>`;
+    return `<tr><td>SMA ${n}</td><td>${ctaNum(r.value, 2)}</td><td class="${ctaCls(r.dist_pts)}">${ctaSigned(r.dist_pts, 1)}</td><td class="${ctaCls(r.dist_pct)}">${ctaSigned(r.dist_pct, 2)}%</td><td class="${ctaCls(r.sign)}">${r.sign > 0 ? '+' : (r.sign < 0 ? '−' : '0')}</td></tr>`;
+  }).join('');
+  const flips = (tr.flips || []).map(f => {
+    return `<tr><td>SMA ${f.n}</td><td>${ctaNum(f.price, 2)}</td><td>${f.side}</td><td class="${ctaCls(f.dist_pts)}">${ctaSigned(f.dist_pts, 1)}</td><td>${ctaSigned(f.d_signal, 2)} → ${ctaSigned(f.signal_after, 2)}</td></tr>`;
+  }).join('');
+  const nf = tr.nearest_flip;
+  const loc = src.us500_local || {}, gspc = src.gspc_public || {}, vx = src.vix || {}, del = src.delta || {};
+  const chg5 = vo.exposure_chg_5d, chgLab = chg5 == null ? '–' : `${ctaSigned(chg5, 3)} (${chg5 < 0 ? 'spada — presja na redukcję ekspozycji' : (chg5 > 0 ? 'rośnie — presja na zwiększenie ekspozycji' : 'bez zmiany')})`;
+  $('ctWinB').innerHTML = `
+    <div class="ctsum ${kind}"><b>${lab}</b><span>trend ${ctaSigned(sm.from_trend, 2)} · noga vol-control ${ctaSigned(sm.from_vol, 2)} · łącznie ${ctaSigned(sm.combined, 2)} (skala −1…+1)</span></div>
+    <p class="ctdisc">${sm.disclaimer || ''}</p>
+    <div class="ctsec"><h3>1. Trend CTA — proxy SMA</h3>
+      <div class="ctgrid">
+        <div class="ctchart tall"><canvas id="ctTrendC"></canvas></div>
+        <div class="ctmeta">
+          <p>Sygnał trendu: <b>${ctaSigned(tr.signal, 2)}</b> — równa średnia znaków ceny względem ${tr.signal_n || 0} SMA. Cena ${ctaNum(D.price, 2)} jest ${[20,50,100,200].every(n => ((tr.sma||{})[n]||(tr.sma||{})[String(n)]||{}).sign < 0) ? 'poniżej wszystkich czterech średnich' : 'w mieszanym układzie względem średnich'}.</p>
+          <table><thead><tr><th>średnia</th><th>poziom</th><th>odległość</th><th>%</th><th>znak</th></tr></thead><tbody>${smaRows}</tbody></table>
+          <p style="margin-top:8px">Progi flip (przecięcie SMA zmienia składową sygnału). Najbliższy: ${nf ? `SMA ${nf.n} przy ${ctaNum(nf.price, 2)} (${ctaSigned(nf.dist_pts, 1)} pkt)` : '–'}.</p>
+          <table><thead><tr><th>próg</th><th>cena flip</th><th>teraz</th><th>odległość</th><th>Δ sygnału</th></tr></thead><tbody>${flips}</tbody></table>
+        </div>
+      </div>
+      <div class="ctleg"><span><i style="background:var(--ink)"></i>zamknięcie US500</span><span><i style="background:var(--pxl)"></i>SMA 20</span><span><i style="background:var(--hot)"></i>SMA 50</span><span><i style="background:var(--hvn)"></i>SMA 100</span><span><i style="background:var(--va)"></i>SMA 200</span></div>
+    </div>
+    <div class="ctsec"><h3>2. Vol-control — proxy RV / VIX</h3>
+      <div class="ctgrid">
+        <div class="ctchart tall"><canvas id="ctVolC"></canvas></div>
+        <div class="ctmeta">
+          <p>Zrealizowana zmienność: <b>RV20 ${ctaNum(vo.rv20_pct, 2)}%</b>, <b>RV60 ${ctaNum(vo.rv60_pct, 2)}%</b> (annualizowana, √252). VIX (nasze dane): <b>${ctaNum(vo.vix, 2)}</b>${vo.vix_asof ? ` · stan ${vo.vix_asof}` : ''}${vo.vix_session ? ` (${fd(vo.vix_session)})` : ''}.</p>
+          <p>Ekspozycja docelowa ≈ 10% / RV20, ograniczona do 0…1,5: <b>${ctaNum(vo.exposure, 3)}</b>. 5 sesji wcześniej: ${ctaNum(vo.exposure_5d, 3)}. Zmiana 5D: <b class="${ctaCls(chg5)}">${chgLab}</b>.</p>
+          <p class="ctmut">Spadająca zrealizowana zmienność zwiększa ekspozycję docelową (skalowanie w górę). Rosnąca RV ją obniża. To wzór proxy, nie alokacja konkretnego funduszu.</p>
+        </div>
+      </div>
+      <div class="ctleg"><span><i style="background:var(--pxl)"></i>RV 20D %</span><span><i style="background:var(--hot)"></i>RV 60D %</span><span><i style="background:var(--vix)"></i>VIX (nasze dane)</span></div>
+    </div>
+    <div class="ctsec"><h3>3. Potwierdzenie przepływu — delta z footprintu</h3>
+      <div class="ctgrid">
+        <div class="ctchart tall"><canvas id="ctFlowC"></canvas></div>
+        <div class="ctmeta">
+          <p>Ostatnie ${fl.n || 0} sesji z delty (ask − bid). Skumulowana delta: <b class="${ctaCls(fl.cum_delta)}">${ctaSigned(fl.cum_delta, 0)}</b>.</p>
+          <p>Sesje wzrostowe: ${fl.n_up || 0}, suma delty <b class="${ctaCls(fl.delta_up)}">${ctaSigned(fl.delta_up, 0)}</b>. Sesje spadkowe: ${fl.n_down || 0}, suma delty <b class="${ctaCls(fl.delta_down)}">${ctaSigned(fl.delta_down, 0)}</b>.</p>
+          <p>Stosunek delty na spadkach do delty na wzrostach: <b>${fl.ratio_down_vs_up == null ? '–' : ctaNum(fl.ratio_down_vs_up, 2)}</b>. ${fl.ratio_note || ''}. To potwierdzenie przepływu w footprintcie, nie wchodzi do linii podsumowania (ta liczy tylko 1 i 2).</p>
+        </div>
+      </div>
+      <div class="ctleg"><span><i style="background:var(--buy);height:8px"></i>delta dnia &gt; 0</span><span><i style="background:var(--sell);height:8px"></i>delta dnia &lt; 0</span><span><i style="background:var(--va)"></i>delta skumulowana</span></div>
+    </div>
+    <p class="ctnote">Zamknięcia US500: lokalnie ${loc.n || '–'} sesji ${fd(loc.from)}–${fd(loc.to)} (M1 / DA Flow / flex). Publiczne ^GSPC: ${gspc.n || '–'} sesji ${fd(gspc.from)}–${fd(gspc.to)} (${(gspc.stooq || gspc.opis || '')}). Historia przed ${fd(gspc.splice_day)} i ${((src.gaps_filled_from_gspc)||[]).length} luk uzupełnione splice’em stóp zwrotu ^GSPC do skali US500. VIX: tylko nasze dane, ${vx.n || 0} sesji ${fd(vx.from)}–${fd(vx.to)}. Delta: ${del.n || 0} sesji ${fd(del.from)}–${fd(del.to)}. Czasy: Europe/Warsaw. Stan ${D.asof_pl || ''} PL. Opis, nie sygnał transakcyjny.</p>`;
+  requestAnimationFrame(paintCtaWin);
+}
+function ctaFit(c, h){
+  if (!c) return null;
+  const box = c.parentElement;
+  const W = Math.max(220, box.getBoundingClientRect().width || 220);
+  const H = h || 200;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  c.width = Math.round(W * dpr);
+  c.height = Math.round(H * dpr);
+  c.style.width = W + 'px';
+  c.style.height = H + 'px';
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {ctx, W, H};
+}
+function ctaCss(name, fallback){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+function paintCtaWin(){
+  const D = CTA; if (!D || D.err) return;
+  const ink = ctaCss('--ink', '#e3e8e5'), mut = ctaCss('--mut', '#94a09b'), line = ctaCss('--line', '#2b3431');
+  const buy = ctaCss('--buy', '#4cc38a'), sell = ctaCss('--sell', '#ef6b5b');
+  const pxl = ctaCss('--pxl', '#5aa2f0'), hot = ctaCss('--hot', '#f0a04b');
+  const hvn = ctaCss('--hvn', '#b892f5'), va = ctaCss('--va', '#e0b04a'), vixC = ctaCss('--vix', '#c4a2f0');
+  const series = D.series || [];
+  const padL = 44, padR = 12, padT = 14, padB = 22;
+  const axis = (ctx, W, H, ymin, ymax, xlabel) => {
+    const n = 4;
+    ctx.strokeStyle = line; ctx.lineWidth = 1;
+    ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = mut;
+    for (let i = 0; i <= n; i++){
+      const t = i / n, y = padT + (H - padT - padB) * (1 - t);
+      const v = ymin + (ymax - ymin) * t;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1), padL - 4, y);
+    }
+  };
+  const xOf = (W, i, n) => padL + (W - padL - padR) * (n <= 1 ? 0.5 : i / (n - 1));
+  const yOf = (H, v, ymin, ymax) => padT + (H - padT - padB) * (1 - (v - ymin) / (ymax - ymin || 1));
+  const poly = (ctx, W, H, pts, ymin, ymax, color, width) => {
+    ctx.beginPath();
+    let started = 0;
+    pts.forEach((v, i) => {
+      if (v == null || !isFinite(v)) { started = 0; return; }
+      const x = xOf(W, i, pts.length), y = yOf(H, v, ymin, ymax);
+      if (!started) { ctx.moveTo(x, y); started = 1; } else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color; ctx.lineWidth = width || 1.4; ctx.stroke();
+  };
+  // trend
+  const tFit = ctaFit($('ctTrendC'), 200);
+  if (tFit && series.length){
+    const {ctx, W, H} = tFit;
+    ctx.clearRect(0, 0, W, H);
+    const keys = ['c', 'sma20', 'sma50', 'sma100', 'sma200'];
+    let ymin = Infinity, ymax = -Infinity;
+    series.forEach(r => keys.forEach(k => { const v = r[k]; if (v != null) { ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); } }));
+    const m = (ymax - ymin) * 0.06 || 10;
+    ymin -= m; ymax += m;
+    axis(ctx, W, H, ymin, ymax);
+    poly(ctx, W, H, series.map(r => r.c), ymin, ymax, ink, 1.6);
+    poly(ctx, W, H, series.map(r => r.sma20), ymin, ymax, pxl, 1.2);
+    poly(ctx, W, H, series.map(r => r.sma50), ymin, ymax, hot, 1.2);
+    poly(ctx, W, H, series.map(r => r.sma100), ymin, ymax, hvn, 1.2);
+    poly(ctx, W, H, series.map(r => r.sma200), ymin, ymax, va, 1.6);
+    ctx.fillStyle = mut; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.font = '10px "IBM Plex Sans Condensed", system-ui, sans-serif';
+    const a = series[0], b = series[series.length - 1];
+    ctx.fillText((a.d || '').slice(0, 10), padL, H - 16);
+    ctx.textAlign = 'right';
+    ctx.fillText((b.d || '').slice(0, 10), W - padR, H - 16);
+  }
+  // vol
+  const vFit = ctaFit($('ctVolC'), 200);
+  if (vFit && series.length){
+    const {ctx, W, H} = vFit;
+    ctx.clearRect(0, 0, W, H);
+    const rv20 = series.map(r => r.rv20 == null ? null : r.rv20 * 100);
+    const rv60 = series.map(r => r.rv60 == null ? null : r.rv60 * 100);
+    const vix = series.map(r => r.vix);
+    let ymin = Infinity, ymax = -Infinity;
+    [...rv20, ...rv60, ...vix].forEach(v => { if (v != null && isFinite(v)) { ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); } });
+    if (!isFinite(ymin)) { ymin = 0; ymax = 40; }
+    const m = (ymax - ymin) * 0.1 || 2;
+    ymin = Math.max(0, ymin - m); ymax += m;
+    axis(ctx, W, H, ymin, ymax);
+    poly(ctx, W, H, rv20, ymin, ymax, pxl, 1.5);
+    poly(ctx, W, H, rv60, ymin, ymax, hot, 1.5);
+    poly(ctx, W, H, vix, ymin, ymax, vixC, 1.6);
+    ctx.fillStyle = mut; ctx.font = '10px "IBM Plex Sans Condensed", system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText((series[0].d || '').slice(0, 10), padL, H - 16);
+    ctx.textAlign = 'right';
+    ctx.fillText((series[series.length - 1].d || '').slice(0, 10), W - padR, H - 16);
+  }
+  // flow
+  const fFit = ctaFit($('ctFlowC'), 200);
+  const days = (D.flow && D.flow.days) || [];
+  if (fFit && days.length){
+    const {ctx, W, H} = fFit;
+    ctx.clearRect(0, 0, W, H);
+    const ds = days.map(x => x.delta);
+    const cs = days.map(x => x.cum);
+    const maxAbs = Math.max(...ds.map(v => Math.abs(v || 0)), 1);
+    const cmin = Math.min(...cs, 0), cmax = Math.max(...cs, 0);
+    const cm = (cmax - cmin) * 0.12 || 1;
+    const yminB = -maxAbs * 1.15, ymaxB = maxAbs * 1.15;
+    const n = days.length;
+    const bw = Math.max(4, (W - padL - padR) / n * 0.62);
+    // right axis for cum — scale independently, draw zero
+    const y0 = yOf(H, 0, yminB, ymaxB);
+    ctx.strokeStyle = line; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(W - padR, y0); ctx.stroke();
+    ctx.setLineDash([]);
+    days.forEach((d, i) => {
+      const cx = xOf(W, i, n);
+      const h = (H - padT - padB) * (Math.abs(d.delta) / (ymaxB - yminB));
+      const y = d.delta >= 0 ? y0 - h : y0;
+      ctx.fillStyle = d.delta >= 0 ? buy : sell;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(cx - bw / 2, y, bw, Math.max(1, h));
+      ctx.globalAlpha = 1;
+    });
+    // cum on same normalized? better secondary scale
+    const yC = v => padT + (H - padT - padB) * (1 - (v - (cmin - cm)) / ((cmax + cm) - (cmin - cm) || 1));
+    ctx.beginPath();
+    days.forEach((d, i) => {
+      const x = xOf(W, i, n), y = yC(d.cum);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = va; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.fillStyle = mut; ctx.font = '9.5px "IBM Plex Sans Condensed", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    days.forEach((d, i) => {
+      if (i === 0 || i === n - 1 || n <= 8 || i % 2 === 0) ctx.fillText((d.d_pl || d.d || '').slice(0, 5), xOf(W, i, n), H - 16);
+    });
+  }
+}
