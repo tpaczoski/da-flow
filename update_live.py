@@ -476,6 +476,16 @@ def build_today_day(day: str, m1_bars: list, updated: str, now_local: datetime) 
         f"update_live: dzień w toku {day}: {len(boxes)} świec M5 "
         f"(+{added} z magazynu M1, baza {src_kind}), ostatnia {last}"
     )
+    try:
+        from vix_series import fill_today
+        nv, nt = fill_today({"boxes": boxes, "vix_open": vix_open, "vix": vix}, day)
+        # fill_today mutates boxes; odczytaj vix_open jeśli się pojawił
+        if vix_open is None:
+            vix_open = next((b[14] for b in boxes if b[9] and len(b) > 14 and b[14] is not None), None)
+        vix = vix or nv > 0
+        print(f"update_live: VIX na dniu {day}: {nv}/{nt} świec z VIX")
+    except Exception as e:
+        print(f"update_live: VIX nie uzupełniony ({e})")
     return {
         "ticker": "US500",
         "session": day,
@@ -493,13 +503,18 @@ def build_today_day(day: str, m1_bars: list, updated: str, now_local: datetime) 
 
 def _day_payload(obj: dict) -> tuple:
     """Część, która ma znaczenie na wykresie (bez znacznika czasu odczytu)."""
+    boxes = obj.get("boxes") or []
+    nv = sum(1 for b in boxes if len(b) > 14 and b[14] is not None)
+    last_v = boxes[-1][14] if boxes and len(boxes[-1]) > 14 else None
     return (
         obj.get("session"),
         obj.get("niepelna"),
-        len(obj.get("boxes") or []),
-        (obj["boxes"][-1][0], obj["boxes"][-1][4]) if obj.get("boxes") else None,
+        len(boxes),
+        (boxes[-1][0], boxes[-1][4]) if boxes else None,
         obj.get("h1x"),
         len(obj.get("cells") or []),
+        nv,
+        last_v,
     )
 
 

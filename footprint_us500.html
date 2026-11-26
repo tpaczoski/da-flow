@@ -61,6 +61,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 #pcorner{z-index:4}
 #prof[width="0"],#pcorner[width="0"],#pbcorner[width="0"]{border:0}
 .row.dp{position:sticky;bottom:63px;z-index:3;background:var(--panel);border-top:1px solid var(--line)}
+.row.vx{position:sticky;bottom:63px;z-index:3;background:var(--panel);border-top:1px solid var(--line)}
+#vax{position:sticky;left:0;z-index:4;background:var(--panel);border-right:1px solid var(--line)}
+#vpr{position:sticky;right:0;z-index:4;background:var(--panel);border-left:1px solid var(--line)}
+.wrap.vx-on .row.dp{bottom:191px}
 #dax{position:sticky;left:0;z-index:4;background:var(--panel);border-right:1px solid var(--line)}
 #dpr{position:sticky;right:0;z-index:4;background:var(--panel);border-left:1px solid var(--line)}
 .row.bot{position:sticky;bottom:0;z-index:3;background:var(--panel);border-top:1px solid var(--line)}
@@ -150,7 +154,7 @@ body.nauka .lab,body.nauka #stat{display:none!important}
     <div class="grp"><span>ostatnie, min</span><label class="chk"><input type="checkbox" id="pf_p60"> 60</label><label class="chk"><input type="checkbox" id="pf_p90"> 90</label><label class="chk"><input type="checkbox" id="pf_p120"> 120</label><label class="chk"><input type="checkbox" id="pf_p180"> 180</label><label class="chk"><input type="checkbox" id="pf_p240"> 240</label><span class="clab" style="margin-left:14px">Widok</span><label class="chk"><input type="checkbox" id="pfTree"> drzewo bid × ask</label><label class="chk"><input type="checkbox" id="pfTreeV"> wolumen obok drzewa</label></div>
   </div>
   <div class="crow"><span class="clab">Widok</span>
-    <label class="chk"><input type="checkbox" id="showDP"> panel delty / wolumenu / CVD</label><label class="chk"><input type="checkbox" id="showVAW"> okno statusu VA</label><label class="chk"><input type="checkbox" id="showDLW"> okno ceny, delty i wolumenu 10 dni</label><label class="chk" title="Wykres liniowy M15 / M30 / H1 z 10 sesji z nakładkami VA i POC: 24 h, 1 / 2 / 3 / 5 dni, doba narastająco"><input type="checkbox" id="showLNW"> okno ceny 10 sesji z profilami (VA / POC)</label><label class="chk" title="Korelacja stóp zwrotu wybranego instrumentu z pozostałymi rynkami: M5 / M15 / H1 / D1, 1–20 sesji, wykres pary"><input type="checkbox" id="showKRW"> okno korelacji instrumentów</label><label class="chk"><input type="checkbox" id="showPSW"> okno profili sesji (5 + dziś, nPOC)</label><label class="chk"><input type="checkbox" id="showINW"> okno intraday: cena, delta, CVD, wolumen</label><label class="chk"><input type="checkbox" id="showMTW"> okno footprintu wielu interwałów</label><label class="chk lab"><input type="checkbox" id="showDJW"> okno dziennika zdarzeń poza próbą</label><label class="chk lab"><input type="checkbox" id="showEVW"> okno historii zdarzeń</label><label class="chk"><input type="checkbox" id="showMKW"> okno kalendarza makro</label><label class="chk lab"><input type="checkbox" id="showZGW"> okno zgodności rynków</label><label class="chk"><input type="checkbox" id="showSUM" checked> podsumowanie (statystyki)</label><label class="chk"><input type="checkbox" id="showLEG" checked> legenda i opis</label>
+    <label class="chk"><input type="checkbox" id="showDP"> panel delty / wolumenu / CVD</label><label class="chk" title="Drugi panel pod wykresem: linia VIX zsynchronizowana ze świecami US500 (oś można odwrócić) i korelacja zwrotów M5 w sesji oraz rolling 60 min. Opis, nie sygnał."><input type="checkbox" id="showVX" checked> panel VIX / korelacja</label><label class="chk" title="Odwrócona oś VIX: wzrost VIX idzie w dół panelu, żeby współruch z US500 był łatwiej widoczny."><input type="checkbox" id="vxInv" checked> odwróć oś VIX</label><label class="chk"><input type="checkbox" id="showVAW"> okno statusu VA</label><label class="chk"><input type="checkbox" id="showDLW"> okno ceny, delty i wolumenu 10 dni</label><label class="chk" title="Wykres liniowy M15 / M30 / H1 z 10 sesji z nakładkami VA i POC: 24 h, 1 / 2 / 3 / 5 dni, doba narastająco"><input type="checkbox" id="showLNW"> okno ceny 10 sesji z profilami (VA / POC)</label><label class="chk" title="Korelacja stóp zwrotu wybranego instrumentu z pozostałymi rynkami: M5 / M15 / H1 / D1, 1–20 sesji, wykres pary"><input type="checkbox" id="showKRW"> okno korelacji instrumentów</label><label class="chk"><input type="checkbox" id="showPSW"> okno profili sesji (5 + dziś, nPOC)</label><label class="chk"><input type="checkbox" id="showINW"> okno intraday: cena, delta, CVD, wolumen</label><label class="chk"><input type="checkbox" id="showMTW"> okno footprintu wielu interwałów</label><label class="chk lab"><input type="checkbox" id="showDJW"> okno dziennika zdarzeń poza próbą</label><label class="chk lab"><input type="checkbox" id="showEVW"> okno historii zdarzeń</label><label class="chk"><input type="checkbox" id="showMKW"> okno kalendarza makro</label><label class="chk lab"><input type="checkbox" id="showZGW"> okno zgodności rynków</label><label class="chk"><input type="checkbox" id="showSUM" checked> podsumowanie (statystyki)</label><label class="chk"><input type="checkbox" id="showLEG" checked> legenda i opis</label>
   </div>
 </details>
 <div id="opWin" class="vawin opwin" hidden role="dialog" aria-label="Opcje SPX: Expected Move, GEX, OI"><div class="vawh" id="opWinH"><b>Opcje SPX · jak w DN 1.9.2</b><span id="opWinPx"></span><button id="opWinX" title="Zamknij">×</button></div><div id="opWinB"></div></div>
@@ -167,7 +171,7 @@ body.nauka .lab,body.nauka #stat{display:none!important}
 <div id="vaWin" class="vawin" hidden role="dialog" aria-label="Status ceny względem VA"><div class="vawh" id="vaWinH"><b>Status VA</b><span id="vaWinPx"></span><button id="vaWinX" title="Zamknij">×</button></div><div id="vaWinB"></div></div>
 <div class="rpbar" id="rpBar" hidden><button id="rpFirst" class="rpb">⏮</button><button id="rpPrev" class="rpb">◀ świeca</button><button id="rpPlay" class="rpb">▶ odtwarzaj</button><button id="rpNext" class="rpb">świeca ▶</button><button id="rpLast" class="rpb">⏭</button><label class="chk">tempo <select id="rpSpeed"><option value="1500">wolno</option><option value="700" selected>średnio</option><option value="250">szybko</option></select></label><span id="rpInfo"></span><span class="note" style="margin:0">strzałki ← → przesuwają o jedną świecę; widać tylko świece do bieżącej, profile i poziomy też liczą się tylko z nich</span></div>
 <div class="sum" id="sum"></div>
-<div class="wrap" id="wrap"><div class="row top"><svg id="corner"></svg><svg id="hdr"></svg><svg id="pcorner"></svg></div><div class="row"><svg id="axis"></svg><svg id="fp"></svg><svg id="prof"></svg></div><div class="row dp" id="dprow" hidden><svg id="dax"></svg><svg id="dlt"></svg><svg id="dpr"></svg></div><div class="row bot"><svg id="bcorner"></svg><svg id="ftr"></svg><svg id="pbcorner"></svg></div></div>
+<div class="wrap" id="wrap"><div class="row top"><svg id="corner"></svg><svg id="hdr"></svg><svg id="pcorner"></svg></div><div class="row"><svg id="axis"></svg><svg id="fp"></svg><svg id="prof"></svg></div><div class="row dp" id="dprow" hidden><svg id="dax"></svg><svg id="dlt"></svg><svg id="dpr"></svg></div><div class="row vx" id="vxrow" hidden><svg id="vax"></svg><svg id="vln"></svg><svg id="vpr"></svg></div><div class="row bot"><svg id="bcorner"></svg><svg id="ftr"></svg><svg id="pbcorner"></svg></div></div>
 <div id="legBox"><div class="legend">
   <span style="flex-basis:100%"><b>Status z testów z grupą kontrolną</b> (najedź na etykietę po szczegóły): <span class="st stp" title="Wynik lepszy od grupy kontrolnej, stabilny w czasie">przewaga</span> <span class="st sto" title="Obiecujące, za mało danych albo test tylko w próbie">obserwacja</span> <span class="st stb" title="Test nie pokazał przewagi">bez przewagi</span> <span class="st stz" title="Zbieramy historię do testu">zbieranie danych</span> <span class="st stk" title="Poziom odniesienia albo opis – nie sygnał">opis</span> · to analiza, nie rekomendacja</span>
   <span><i style="background:var(--buy);opacity:.45"></i>delta poziomu dodatnia</span>
@@ -184,7 +188,7 @@ body.nauka .lab,body.nauka #stat{display:none!important}
   <span><i style="background:repeating-linear-gradient(45deg,var(--lvn) 0 1.5px,transparent 1.5px 5px);opacity:.6;border:1px dashed var(--lvn)"></i>strefa LVN – luka wolumenu <span class="st stk" title="Poziom odniesienia, nie sygnał">opis</span></span>
   <span><i style="border-top:1.5px dashed var(--ink);height:0"></i>ostatnia cena w wybranym zakresie (znacznik na osi i przy profilu)</span>
   <span><b style="color:var(--sell)">▼</b> / <b style="color:var(--buy)">▲</b> dywergencja niedźwiedzia / byka: Δ, CVD, wol <span class="st stb" title="Po dywergencji cena częściej idzie dalej (55% vs 42%); kontra traci (21.10.2026)">bez przewagi</span></span>
-  <span><b style="color:var(--buy)">✓</b> / <b style="color:var(--sell)">✗</b> pasek VIX pod świecą: potwierdzenie / rozbieżność; tło różowe = VIX nad otwarciem sesji (risk-off), zielone = pod (risk-on) <span class="st stz" title="Reżim VIX – zbieramy dane od 23.10.2026">zbieranie danych</span></span>
+  <span><b style="color:var(--buy)">✓</b> / <b style="color:var(--sell)">✗</b> pasek VIX pod świecą: potwierdzenie / rozbieżność; tło różowe = VIX nad otwarciem sesji (risk-off), zielone = pod (risk-on) <span class="st stz" title="Reżim VIX – zbieramy dane od 23.10.2026">zbieranie danych</span></span><span><i style="background:var(--vix);height:3px;width:18px;vertical-align:middle"></i> panel VIX: linia zamknięcia VIX w czasie świec wykresu (opcjonalnie oś odwrócona); r = korelacja Pearsona zwrotów M5 US500 i VIX w sesji oraz w rolling 60 min. Opis, nie sygnał.</span>
   <span><i style="border:2px dashed var(--ua)"></i>UA – niedokończona aukcja (linia do momentu, gdy cena przejdzie poziom) <span class="st stk" title="Nie testowane">opis</span></span>
   <span><i style="background:var(--tvt);opacity:.4"></i>TPO max – najwięcej czasu <span class="st sto" title="POC z TPO i z wolumenu dotknięty następnego dnia 7 z 12 razy – za mało danych">obserwacja</span></span>
   <span><i style="background:var(--tvv);opacity:.4"></i>TPO min – cena tylko w jednym okresie 30 min <span class="st stk" title="Nie testowane">opis</span></span>
@@ -416,6 +420,8 @@ $('showN').onchange = e => { S.nodes = e.target.checked; save(); render(true); }
 $('showD').onchange = e => { S.div = e.target.checked; save(); render(true); };
 $('showCZ').onchange = e => { S.cz = e.target.checked; save(); render(true); };
 $('showDP').onchange = e => { S.dp = e.target.checked; save(); render(true); };
+$('showVX').onchange = e => { S.vx = e.target.checked; save(); render(true); };
+$('vxInv').onchange = e => { S.vxInv = e.target.checked; save(); render(true); };
 $('showUA').onchange = e => { S.ua = e.target.checked; save(); render(true); };
 $('showTV').onchange = e => { S.tv = e.target.checked; save(); render(true); };
 for (const k of PFK) $('pf_' + k).onchange = e => { S.pf[k] = e.target.checked; save(); render(true); };
@@ -634,7 +640,7 @@ function render(keep) {
   $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
   markPreset();
   $('rpBar').hidden = !S.rp; $('rpOn').setAttribute('aria-pressed', String(!!S.rp)); $('rpOn').textContent = S.rp ? '■ zakończ odtwarzanie' : '▶ Odtwarzanie';
-  $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
+  $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showVX').checked = S.vx !== false; $('vxInv').checked = S.vxInv !== false; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
   BIN = S.bin === 'auto' ? autoBin() : S.bin * TK;
   $('ctrlInfo').innerHTML = `<b>${INST}</b> · ${S.day.slice(8)}.${S.day.slice(5, 7)}.${S.day.slice(0, 4)} <span id="clk"></span> <span id="liveSt"></span> <span id="lastPx"></span> <b>${S.tf}</b> <b>${S.rng === 'rth' ? 'sesja kasowa' : 'cała doba'}</b> <b>krok ${S.bin === 'auto' ? 'auto (' + BIN + ' pkt)' : BIN + ' pkt'}</b>${S.rp ? ' <b>odtwarzanie</b>' : ''} <span id="atrBarBox"></span>`;
   const D = DATA[S.day], bin = BIN; let cols = columns();
@@ -1514,6 +1520,52 @@ function render(keep) {
       tb += `<text x="8" y="${36 + 4 * 22}" font-size="9" fill="${C.mut}">do świecy ${cols[cols.length - 1].t}${M1 ? ' · M1: z footprintu M5' : ''} · ×N = wolumen / średnia 5 sesji</text>`;
       tb += `<text x="8" y="${DH - 30}" font-size="10" fill="${C.mut}">Δ w widoku: <tspan fill="${cols.reduce((a, c) => a + c.d, 0) >= 0 ? C.buy : C.sell}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.d, 0), 1)}</tspan> · wol: <tspan fill="${C.ink}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.v, 0))}</tspan></text><text x="8" y="${DH - 12}" font-size="10" fill="${C.mut}">acc Δ na końcu: <tspan fill="${(accs[accs.length - 1] ?? 0) >= 0 ? C.buy : C.sell}" font-weight="600">${accs.length ? fmt(accs[accs.length - 1], 1) : '–'}</tspan></text>`;
       dp.innerHTML = tb;
+    } }
+  { const want = S.vx !== false, row = $('vxrow'), has = cols.some(c => c.ve != null || c.vs != null);
+    const on = want && INST !== 'VIX';
+    row.hidden = !on; $('wrap').classList.toggle('vx-on', on);
+    if (on) {
+      const VH = 128, inv = S.vxInv !== false, pts = cols.map((c, i) => ({i, t: c.t, c: c.C, v: c.ve != null ? c.ve : c.vs, vs: c.vs, ve: c.ve}));
+      const ok = pts.filter(p => p.v != null);
+      const out = [], ax = [];
+      if (ok.length < 2) {
+        out.push(`<text x="12" y="64" font-size="11" fill="${C.mut}">Brak danych VIX w tym zakresie – panel pojawi się, gdy będzie przynajmniej kilka świec z VIX.</text>`);
+      } else {
+        const lo0 = Math.min(...ok.map(p => p.v)), hi0 = Math.max(...ok.map(p => p.v)), pd = Math.max((hi0 - lo0) * .08, 0.05);
+        const lo = lo0 - pd, hi = hi0 + pd, rg = hi - lo || 1;
+        const yv = v => inv ? (8 + (v - lo) / rg * (VH - 20)) : (VH - 12 - (v - lo) / rg * (VH - 20));
+        const vo = DATA[S.day] && DATA[S.day].vix_open;
+        if (vo != null && vo >= lo && vo <= hi) out.push(`<line x1="0" x2="${W}" y1="${yv(vo)}" y2="${yv(vo)}" stroke="${C.mut}" stroke-width=".8" stroke-dasharray="4 3"/>`);
+        let d = '';
+        pts.forEach(p => { if (p.v == null) return; d += `${d ? 'L' : 'M'}${p.i * CW + CW / 2},${yv(p.v)}`; });
+        out.push(`<path d="${d}" fill="none" stroke="${C.vix}" stroke-width="2"/>`);
+        pts.forEach(p => { if (p.v == null) return; out.push(`<circle cx="${p.i * CW + CW / 2}" cy="${yv(p.v)}" r="2.2" fill="${C.vix}"><title>${p.t}: VIX ${p.v.toFixed(2)}${p.c != null ? ` · ${INST} ${p.c}` : ''}</title></circle>`); });
+        const last = ok[ok.length - 1];
+        out.push(`<text x="${last.i * CW + CW / 2 + 6}" y="${Math.max(12, Math.min(VH - 6, yv(last.v) - 6))}" font-size="10" font-weight="700" fill="${C.vix}">${last.v.toFixed(2)}</text>`);
+      }
+      const pearson = (xs, ys) => { const n = xs.length; if (n < 5) return null; const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n; let num = 0, dx = 0, dy = 0; for (let i = 0; i < n; i++) { const a = xs[i] - mx, b = ys[i] - my; num += a * b; dx += a * a; dy += b * b; } const den = Math.sqrt(dx * dy); return den < 1e-12 ? null : num / den; };
+      const rets = [];
+      for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; if (a.v == null || b.v == null || !a.c || !b.c) continue; rets.push({rc: (b.c - a.c) / a.c, rv: (b.v - a.v) / a.v}); }
+      const rSes = pearson(rets.map(q => q.rc), rets.map(q => q.rv));
+      const last60 = rets.slice(-12), r60 = pearson(last60.map(q => q.rc), last60.map(q => q.rv));
+      const fr = v => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',');
+      const colr = v => v == null ? C.mut : v < -0.3 ? C.buy : v > 0.3 ? C.sell : C.ink;
+      const vl = $('vln'); vl.setAttribute('width', W); vl.setAttribute('height', VH); vl.innerHTML = out.join('');
+      if (ok.length >= 2) {
+        const lo0 = Math.min(...ok.map(p => p.v)), hi0 = Math.max(...ok.map(p => p.v)), pd = Math.max((hi0 - lo0) * .08, 0.05), lo = lo0 - pd, hi = hi0 + pd;
+        const topL = inv ? hi : lo, botL = inv ? lo : hi;
+        ax.push(`<text x="${AW - 6}" y="14" text-anchor="end" font-size="9.5" fill="${C.vix}" font-weight="700">VIX${inv ? ' odwr.' : ''}</text>`);
+        ax.push(`<text x="${AW - 6}" y="28" text-anchor="end" font-size="8.5" fill="${C.mut}">${topL.toFixed(2)}</text>`);
+        ax.push(`<text x="${AW - 6}" y="${VH - 6}" text-anchor="end" font-size="8.5" fill="${C.mut}">${botL.toFixed(2)}</text>`);
+      } else ax.push(`<text x="${AW - 6}" y="14" text-anchor="end" font-size="9.5" fill="${C.vix}" font-weight="700">VIX</text>`);
+      const va = $('vax'); va.setAttribute('width', AW); va.setAttribute('height', VH); va.innerHTML = ax.join('');
+      const tw = Math.max(Number($('prof').getAttribute('width') || 0), 300), vp = $('vpr');
+      vp.setAttribute('width', tw); vp.setAttribute('height', VH);
+      let tb = `<text x="10" y="18" font-size="10" font-weight="700" fill="${C.vix}">korelacja ${INST} × VIX</text>`;
+      tb += `<text x="10" y="40" font-size="12" font-weight="700" fill="${colr(rSes)}">sesja  r = ${fr(rSes)}</text><text x="10" y="54" font-size="9.5" fill="${C.mut}">zwroty M5, n = ${rets.length}</text>`;
+      tb += `<text x="10" y="76" font-size="12" font-weight="700" fill="${colr(r60)}">60 min  r = ${fr(r60)}</text><text x="10" y="90" font-size="9.5" fill="${C.mut}">ostatnie ${last60.length} zwrotów (rolling)</text>`;
+      tb += `<text x="10" y="${VH - 10}" font-size="9" fill="${C.mut}">${inv ? 'oś VIX odwrócona · ' : ''}typowa relacja: r < 0 · opis, nie sygnał</text>`;
+      vp.innerHTML = tb;
     } }
   const ft = $('ftr'); ft.setAttribute('width', W); ft.setAttribute('height', FH); ft.innerHTML = of.join('');
   const bc = $('bcorner'); bc.setAttribute('width', AW); bc.setAttribute('height', FH);

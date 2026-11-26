@@ -208,6 +208,8 @@ $('showN').onchange = e => { S.nodes = e.target.checked; save(); render(true); }
 $('showD').onchange = e => { S.div = e.target.checked; save(); render(true); };
 $('showCZ').onchange = e => { S.cz = e.target.checked; save(); render(true); };
 $('showDP').onchange = e => { S.dp = e.target.checked; save(); render(true); };
+$('showVX').onchange = e => { S.vx = e.target.checked; save(); render(true); };
+$('vxInv').onchange = e => { S.vxInv = e.target.checked; save(); render(true); };
 $('showUA').onchange = e => { S.ua = e.target.checked; save(); render(true); };
 $('showTV').onchange = e => { S.tv = e.target.checked; save(); render(true); };
 for (const k of PFK) $('pf_' + k).onchange = e => { S.pf[k] = e.target.checked; save(); render(true); };
@@ -426,7 +428,7 @@ function render(keep) {
   $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
   markPreset();
   $('rpBar').hidden = !S.rp; $('rpOn').setAttribute('aria-pressed', String(!!S.rp)); $('rpOn').textContent = S.rp ? '■ zakończ odtwarzanie' : '▶ Odtwarzanie';
-  $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
+  $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showVX').checked = S.vx !== false; $('vxInv').checked = S.vxInv !== false; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
   BIN = S.bin === 'auto' ? autoBin() : S.bin * TK;
   $('ctrlInfo').innerHTML = `<b>${INST}</b> · ${S.day.slice(8)}.${S.day.slice(5, 7)}.${S.day.slice(0, 4)} <span id="clk"></span> <span id="liveSt"></span> <span id="lastPx"></span> <b>${S.tf}</b> <b>${S.rng === 'rth' ? 'sesja kasowa' : 'cała doba'}</b> <b>krok ${S.bin === 'auto' ? 'auto (' + BIN + ' pkt)' : BIN + ' pkt'}</b>${S.rp ? ' <b>odtwarzanie</b>' : ''} <span id="atrBarBox"></span>`;
   const D = DATA[S.day], bin = BIN; let cols = columns();
@@ -1306,6 +1308,52 @@ function render(keep) {
       tb += `<text x="8" y="${36 + 4 * 22}" font-size="9" fill="${C.mut}">do świecy ${cols[cols.length - 1].t}${M1 ? ' · M1: z footprintu M5' : ''} · ×N = wolumen / średnia 5 sesji</text>`;
       tb += `<text x="8" y="${DH - 30}" font-size="10" fill="${C.mut}">Δ w widoku: <tspan fill="${cols.reduce((a, c) => a + c.d, 0) >= 0 ? C.buy : C.sell}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.d, 0), 1)}</tspan> · wol: <tspan fill="${C.ink}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.v, 0))}</tspan></text><text x="8" y="${DH - 12}" font-size="10" fill="${C.mut}">acc Δ na końcu: <tspan fill="${(accs[accs.length - 1] ?? 0) >= 0 ? C.buy : C.sell}" font-weight="600">${accs.length ? fmt(accs[accs.length - 1], 1) : '–'}</tspan></text>`;
       dp.innerHTML = tb;
+    } }
+  { const want = S.vx !== false, row = $('vxrow'), has = cols.some(c => c.ve != null || c.vs != null);
+    const on = want && INST !== 'VIX';
+    row.hidden = !on; $('wrap').classList.toggle('vx-on', on);
+    if (on) {
+      const VH = 128, inv = S.vxInv !== false, pts = cols.map((c, i) => ({i, t: c.t, c: c.C, v: c.ve != null ? c.ve : c.vs, vs: c.vs, ve: c.ve}));
+      const ok = pts.filter(p => p.v != null);
+      const out = [], ax = [];
+      if (ok.length < 2) {
+        out.push(`<text x="12" y="64" font-size="11" fill="${C.mut}">Brak danych VIX w tym zakresie – panel pojawi się, gdy będzie przynajmniej kilka świec z VIX.</text>`);
+      } else {
+        const lo0 = Math.min(...ok.map(p => p.v)), hi0 = Math.max(...ok.map(p => p.v)), pd = Math.max((hi0 - lo0) * .08, 0.05);
+        const lo = lo0 - pd, hi = hi0 + pd, rg = hi - lo || 1;
+        const yv = v => inv ? (8 + (v - lo) / rg * (VH - 20)) : (VH - 12 - (v - lo) / rg * (VH - 20));
+        const vo = DATA[S.day] && DATA[S.day].vix_open;
+        if (vo != null && vo >= lo && vo <= hi) out.push(`<line x1="0" x2="${W}" y1="${yv(vo)}" y2="${yv(vo)}" stroke="${C.mut}" stroke-width=".8" stroke-dasharray="4 3"/>`);
+        let d = '';
+        pts.forEach(p => { if (p.v == null) return; d += `${d ? 'L' : 'M'}${p.i * CW + CW / 2},${yv(p.v)}`; });
+        out.push(`<path d="${d}" fill="none" stroke="${C.vix}" stroke-width="2"/>`);
+        pts.forEach(p => { if (p.v == null) return; out.push(`<circle cx="${p.i * CW + CW / 2}" cy="${yv(p.v)}" r="2.2" fill="${C.vix}"><title>${p.t}: VIX ${p.v.toFixed(2)}${p.c != null ? ` · ${INST} ${p.c}` : ''}</title></circle>`); });
+        const last = ok[ok.length - 1];
+        out.push(`<text x="${last.i * CW + CW / 2 + 6}" y="${Math.max(12, Math.min(VH - 6, yv(last.v) - 6))}" font-size="10" font-weight="700" fill="${C.vix}">${last.v.toFixed(2)}</text>`);
+      }
+      const pearson = (xs, ys) => { const n = xs.length; if (n < 5) return null; const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n; let num = 0, dx = 0, dy = 0; for (let i = 0; i < n; i++) { const a = xs[i] - mx, b = ys[i] - my; num += a * b; dx += a * a; dy += b * b; } const den = Math.sqrt(dx * dy); return den < 1e-12 ? null : num / den; };
+      const rets = [];
+      for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; if (a.v == null || b.v == null || !a.c || !b.c) continue; rets.push({rc: (b.c - a.c) / a.c, rv: (b.v - a.v) / a.v}); }
+      const rSes = pearson(rets.map(q => q.rc), rets.map(q => q.rv));
+      const last60 = rets.slice(-12), r60 = pearson(last60.map(q => q.rc), last60.map(q => q.rv));
+      const fr = v => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',');
+      const colr = v => v == null ? C.mut : v < -0.3 ? C.buy : v > 0.3 ? C.sell : C.ink;
+      const vl = $('vln'); vl.setAttribute('width', W); vl.setAttribute('height', VH); vl.innerHTML = out.join('');
+      if (ok.length >= 2) {
+        const lo0 = Math.min(...ok.map(p => p.v)), hi0 = Math.max(...ok.map(p => p.v)), pd = Math.max((hi0 - lo0) * .08, 0.05), lo = lo0 - pd, hi = hi0 + pd;
+        const topL = inv ? hi : lo, botL = inv ? lo : hi;
+        ax.push(`<text x="${AW - 6}" y="14" text-anchor="end" font-size="9.5" fill="${C.vix}" font-weight="700">VIX${inv ? ' odwr.' : ''}</text>`);
+        ax.push(`<text x="${AW - 6}" y="28" text-anchor="end" font-size="8.5" fill="${C.mut}">${topL.toFixed(2)}</text>`);
+        ax.push(`<text x="${AW - 6}" y="${VH - 6}" text-anchor="end" font-size="8.5" fill="${C.mut}">${botL.toFixed(2)}</text>`);
+      } else ax.push(`<text x="${AW - 6}" y="14" text-anchor="end" font-size="9.5" fill="${C.vix}" font-weight="700">VIX</text>`);
+      const va = $('vax'); va.setAttribute('width', AW); va.setAttribute('height', VH); va.innerHTML = ax.join('');
+      const tw = Math.max(Number($('prof').getAttribute('width') || 0), 300), vp = $('vpr');
+      vp.setAttribute('width', tw); vp.setAttribute('height', VH);
+      let tb = `<text x="10" y="18" font-size="10" font-weight="700" fill="${C.vix}">korelacja ${INST} × VIX</text>`;
+      tb += `<text x="10" y="40" font-size="12" font-weight="700" fill="${colr(rSes)}">sesja  r = ${fr(rSes)}</text><text x="10" y="54" font-size="9.5" fill="${C.mut}">zwroty M5, n = ${rets.length}</text>`;
+      tb += `<text x="10" y="76" font-size="12" font-weight="700" fill="${colr(r60)}">60 min  r = ${fr(r60)}</text><text x="10" y="90" font-size="9.5" fill="${C.mut}">ostatnie ${last60.length} zwrotów (rolling)</text>`;
+      tb += `<text x="10" y="${VH - 10}" font-size="9" fill="${C.mut}">${inv ? 'oś VIX odwrócona · ' : ''}typowa relacja: r < 0 · opis, nie sygnał</text>`;
+      vp.innerHTML = tb;
     } }
   const ft = $('ftr'); ft.setAttribute('width', W); ft.setAttribute('height', FH); ft.innerHTML = of.join('');
   const bc = $('bcorner'); bc.setAttribute('width', AW); bc.setAttribute('height', FH);
