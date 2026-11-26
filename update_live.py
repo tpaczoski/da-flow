@@ -10,6 +10,7 @@ import os
 import stat
 import subprocess
 import sys
+import time
 import tempfile
 import zipfile
 from collections import defaultdict
@@ -26,6 +27,10 @@ LOCK = Path("/workspace/raporty/flex_live/.update_live.lock")
 LIVE = SITE / "live" / "US500_live.json"
 DAY_LIVE = SITE / "live" / "US500_day.json"
 US500_JSON = SITE / "data" / "US500.json"
+HVN_JSON = SITE / "data" / "US500_hvn_lvn.json"
+HVN_BUILD = SITE / "build_hvn_lvn_json.py"
+HVN_MAX_SEC = 10
+HVN_MIN_AGE = 3600  # raz na godzinę
 REPO = "https://github.com/tpaczoski/da-flow.git"
 REMOTE = "https://x-access-token@github.com/tpaczoski/da-flow.git"
 PACK_DIRS = [
@@ -128,6 +133,46 @@ def compact_bars(bar_map: dict) -> list:
     for b in bars:
         b["lv"] = [[p, bi, a] for p, bi, a in b["lv"]]
     return bars
+
+
+
+def maybe_refresh_hvn_lvn(now_local: datetime) -> bool:
+    """Odśwież data/US500_hvn_lvn.json najwyżej raz na godzinę (budżet 10 s).
+
+    Zwraca True, gdy plik na dysku zmienił się w tym przebiegu.
+    Błąd lub przekroczenie czasu nie przerywa odświeżenia live.
+    """
+    if not HVN_BUILD.is_file():
+        print("update_live: brak build_hvn_lvn_json.py, pomijam HVN/LVN")
+        return False
+    if HVN_JSON.is_file():
+        age = time.time() - HVN_JSON.stat().st_mtime
+        if age < HVN_MIN_AGE:
+            print(f"update_live: HVN/LVN świeże ({int(age)} s), pomijam przebudowę")
+            return False
+    before = HVN_JSON.read_bytes() if HVN_JSON.is_file() else b""
+    try:
+        r = subprocess.run(
+            [sys.executable, str(HVN_BUILD)],
+            cwd=str(SITE),
+            capture_output=True,
+            text=True,
+            timeout=HVN_MAX_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        print("update_live: budowa HVN/LVN przekroczyła 10 s – pomijam, live bez zmian w tym pliku")
+        return False
+    except Exception as e:
+        print(f"update_live: budowa HVN/LVN nie wystartowała ({e})")
+        return False
+    tail = redact(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-1] if ((r.stdout or "") + (r.stderr or "")).strip() else "")
+    if r.returncode != 0:
+        print(f"update_live: budowa HVN/LVN nie powiodła się (exit {r.returncode}): {tail}")
+        return False
+    after = HVN_JSON.read_bytes() if HVN_JSON.is_file() else b""
+    changed = after != before
+    print("update_live: HVN/LVN " + ("zaktualizowane" if changed else "przebudowane, bez zmian w pliku") + (f" ({tail})" if tail else ""))
+    return changed
 
 
 def write_json(path: Path, obj) -> None:
@@ -657,10 +702,18 @@ def main() -> None:
             )
 
         day_changed = write_today_day(live_d, bars, updated, now)
-        if not live_changed and not day_changed:
+        hvn_changed = maybe_refresh_hvn_lvn(now)
+        rels = []
+        if live_changed:
+            rels.append("live/US500_live.json")
+        if day_changed:
+            rels.append("live/US500_day.json")
+        if hvn_changed:
+            rels.append("data/US500_hvn_lvn.json")
+        if not rels:
             print("update_live: bez zmian, pomijam push")
             return
-        git_push_live(now, ["live/US500_live.json", "live/US500_day.json"])
+        git_push_live(now, rels)
     finally:
         lock.close()
 

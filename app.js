@@ -23,6 +23,8 @@ const $ = id => document.getElementById(id);
 const S = {day: null, tf: 'M5', rng: 'rth', bin: 1, va: true, z: true, nodes: true, div: true, cz: true, dp: false, ua: true, tv: false, vw: 'rth', vwA: null, ref: true, naked: true, opt: true, atr: true, st: false, ea: true, rp: false, rpN: 12, sel: null, cell: {ba: true, v: true, d: true}, pf: {pre: false, rth: false, day: true}};
 let FIRST_VISIT = true;
 try { const raw = localStorage.getItem('fp-us500'); if (raw) FIRST_VISIT = false; const s = JSON.parse(raw || '{}'); Object.assign(S, s); } catch (e) {}
+if (/(?:^|[?&])hvn=1(?:&|$)/.test(location.search)) S.hvw = true;
+var HVN = null, HVN_ST = 0;
 if (!S.pf || typeof S.pf !== 'object') S.pf = {pre: false, rth: false, day: true};
 if (!S.cell || typeof S.cell !== 'object') S.cell = {ba: true, v: true, d: true};
 for (const k of ['ba', 'v', 'd']) $('cell_' + k).onchange = e => { S.cell[k] = e.target.checked; save(); render(true); };
@@ -57,6 +59,8 @@ $('psWinX').onclick = () => { S.psw = false; save(); render(true); };
 $('dlWinX').onclick = () => { S.dlw = false; save(); render(true); };
 $('showKRW').onchange = e => { S.krw = e.target.checked; save(); render(true); };
 $('krWinX').onclick = () => { S.krw = false; save(); render(true); };
+$('showHVW').onchange = e => { S.hvw = e.target.checked; save(); render(true); };
+$('hvWinX').onclick = () => { S.hvw = false; save(); render(true); };
 $('showLNW').onchange = e => { S.lnw = e.target.checked; save(); render(true); };
 $('lnWinX').onclick = () => { S.lnw = false; save(); render(true); };
 $('showMKW').onchange = e => { S.mkw = e.target.checked; save(); render(true); };
@@ -84,7 +88,7 @@ const dragWin = (wid, hid, xid, key) => { // przeciąganie pływających okien (
   h.addEventListener('pointermove', e => { if (!d) return; S[key] = {x: e.clientX - d.dx, y: e.clientY - d.dy}; place(); });
   h.addEventListener('pointerup', () => { if (d) { d = null; save(); } });
 };
-dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos');
+dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos'); dragWin('hvWin', 'hvWinH', 'hvWinX', 'hvwPos');
 $('pfTreeV').onchange = e => { S.treeV = e.target.checked; save(); render(true); };
 // odtwarzanie (replay)
 let RPN_MAX = 0, RP_T = null;
@@ -425,7 +429,8 @@ function nightOf(DT, day) {
 function render(keep) {
   applyMode();
   document.querySelectorAll('.seg:not(#theme)').forEach(s => s.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v == S[{tf: 'tf', rng: 'rng', bin: 'bin', vwm: 'vw'}[s.id]]))));
-  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
+  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
+  drawHvnWin();
   markPreset();
   $('rpBar').hidden = !S.rp; $('rpOn').setAttribute('aria-pressed', String(!!S.rp)); $('rpOn').textContent = S.rp ? '■ zakończ odtwarzanie' : '▶ Odtwarzanie';
   $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showVX').checked = S.vx !== false; $('vxInv').checked = S.vxInv !== false; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
@@ -2112,3 +2117,244 @@ $('wrap').addEventListener('scroll', () => { const g = document.getElementById('
 let _rt; addEventListener('resize', () => { if (S.bin !== 'auto') return; clearTimeout(_rt); _rt = setTimeout(() => render(), 200); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => render(true));
 new MutationObserver(() => render(true)).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+
+/* US500 HVN/LVN H1 – okno niezmitygowanego wolumenu (ostatnie 3 tygodnie) */
+const HVN_CMAP = [[0,"#0B0E14"],[0.04,"#15202B"],[0.12,"#1A3A4A"],[0.28,"#156B73"],[0.45,"#1B9A5C"],[0.62,"#C6C22A"],[0.78,"#F0A202"],[0.90,"#F2580A"],[1,"#FFE9B0"]];
+function hvnHex(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+function hvnLerpC(t){
+  const s = HVN_CMAP; t = Math.max(0, Math.min(1, t));
+  let i = 0; while (i < s.length - 2 && t > s[i+1][0]) i++;
+  const a = s[i], b = s[i+1], u = (t - a[0]) / Math.max(1e-9, b[0] - a[0]);
+  const A = hvnHex(a[1]), B = hvnHex(b[1]);
+  return `rgb(${A[0]+(B[0]-A[0])*u|0},${A[1]+(B[1]-A[1])*u|0},${A[2]+(B[2]-A[2])*u|0})`;
+}
+function hvnLoad(){
+  if (HVN_ST) return;
+  HVN_ST = 1;
+  fetch('data/US500_hvn_lvn.json?t=' + Date.now(), {cache: 'no-store'})
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(j => { HVN = j; if (S.hvw) drawHvnWin(); })
+    .catch(() => { HVN = {err: 1}; if (S.hvw) drawHvnWin(); });
+}
+function drawHvnWin(){
+  const box = $('hvWin'); if (!box) return;
+  box.hidden = !S.hvw;
+  if (!S.hvw) return;
+  if (!HVN) { hvnLoad(); $('hvWinPx').textContent = 'wczytywanie…'; $('hvWinB').innerHTML = '<p class="hvnote">Wczytywanie data/US500_hvn_lvn.json…</p>'; return; }
+  if (HVN.err) { $('hvWinPx').textContent = 'brak danych'; $('hvWinB').innerHTML = '<p class="hvnote">Nie udało się wczytać data/US500_hvn_lvn.json.</p>'; return; }
+  const D = HVN, C = D.counts || {}, open = D.open || [], last = D.last_price;
+  const fd = (d) => d ? `${String(d).slice(8,10)}.${String(d).slice(5,7)}.${String(d).slice(0,4)}` : '';
+  const asof = D.asof ? D.asof.slice(0,16).replace('T',' ') : '';
+  const lastTs = D.last_ts ? D.last_ts.slice(8,16).replace('T',' ') : '';
+  $('hvWinPx').innerHTML = `${fd(D.from)}–${fd(D.to)} · cena ${last != null ? last.toLocaleString('pl-PL', {minimumFractionDigits:1, maximumFractionDigits:1}) : '–'} · ${lastTs} PL · niezmitygowane ${C.niezmitygowane_hvn || 0} HVN / ${C.niezmitygowane_lvn || 0} LVN`;
+  const rows = open.slice().sort((a,b) => a.cena - b.cena).reverse().map(lv => {
+    const dist = lv.dist, sign = dist > 0 ? '+' : (dist < 0 ? '−' : '');
+    const sta = lv.status === 'w_grze' ? 'w grze' : 'otwarte';
+    const poc = lv.poc ? ' <span class="hvnote" style="padding:0">POC</span>' : '';
+    return `<tr><td class="${lv.typ==='HVN'?'hv-hvn':'hv-lvn'}">${lv.typ}${poc}</td><td>${lv.cena}</td><td>${lv.form_pl || lv.sesja || ''}</td><td>${sign}${Math.abs(dist).toFixed(1)}</td><td class="${lv.status==='w_grze'?'hv-play':'hv-open'}">${sta}</td><td>${lv.vol != null ? lv.vol.toLocaleString('pl-PL', {maximumFractionDigits:1}) : ''}</td></tr>`;
+  }).join('');
+  $('hvWinB').innerHTML = `<div class="hvwrap">
+    <div class="hvheat" id="hvHeat"><canvas id="hvHeatC"></canvas><div class="hvtip" id="hvTip"></div></div>
+    <div class="hvprof" id="hvProf"><canvas id="hvProfC"></canvas></div>
+    <div class="hvlist"><table><thead><tr><th>typ</th><th>cena</th><th>powstanie</th><th>od ceny</th><th>status</th><th>wolumen</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Brak niezmitygowanych poziomów w oknie.</td></tr>'}</tbody></table></div>
+  </div>
+  <div class="hvleg">
+    <span><i style="background:#FFC14A"></i>HVN niezmitygowany</span>
+    <span><i style="background:#7EC8F8"></i>LVN niezmitygowany</span>
+    <span><i style="background:#FF9F43;opacity:.7"></i>HVN zmitygowany</span>
+    <span><i style="background:#5DA9E9;opacity:.7"></i>LVN zmitygowany</span>
+    <span><i style="background:#F4F1DE;height:0;border-top:1.5px dotted #F4F1DE;width:14px"></i>cena bieżąca</span>
+    <span><i style="background:#3DDC97"></i>H1 wzrost / <i style="background:#F07178"></i>spadek</span>
+  </div>
+  <div class="hvnote">Profil dzienny wygładzony Gaussem (σ=2 pkt). Mitygacja = pierwszy powrót po oddaleniu ≥15 pkt (±1,5 pkt). „W grze” = od powstania cena jeszcze nie odeszła o 15 pkt. Prawy profil: wolumen 3 tyg. na cenach jeszcze niezmitygowanych (jasne słupki; w tle cały profil). Czasy: Europe/Warsaw. Dane do sesji ${fd(D.to)} włącznie${asof ? ' (stan '+asof+' PL)' : ''}.</div>`;
+  requestAnimationFrame(paintHvnWin);
+}
+function paintHvnWin(){
+  const D = HVN; if (!D || D.err) return;
+  const heatBox = $('hvHeat'), profBox = $('hvProf'), cH = $('hvHeatC'), cP = $('hvProfC');
+  if (!heatBox || !cH || !cP) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const hours = D.hours || [], cols = D.cols || [], h1 = D.h1 || [], levels = D.levels || [];
+  const n = hours.length; if (!n) return;
+  const pmin = (D.pmin || 0) - 8, pmax = (D.pmax || 0) + 8, pr = Math.max(1, pmax - pmin);
+  const last = D.last_price, vmax = Math.max(1e-6, D.vmax || 1);
+  const layout = (canvas, box, minH) => {
+    const w = Math.max(120, box.clientWidth || box.getBoundingClientRect().width || 200);
+    const h = Math.max(minH, box.clientHeight || 420);
+    box.style.height = h + 'px';
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return {ctx, w, h};
+  };
+  const heatH = Math.max(440, Math.min(620, Math.floor((window.innerHeight || 800) * 0.62)));
+  const Hm = layout(cH, heatBox, heatH), Pm = layout(cP, profBox, heatH);
+  const L = 44, R = 8, T = 10, B = 28;
+  const x0 = L, x1 = Hm.w - R, y0 = T, y1 = Hm.h - B;
+  const xOf = (j) => x0 + (j + 0.5) * (x1 - x0) / n;
+  const xCol = (j) => x0 + j * (x1 - x0) / n;
+  const yOf = (p) => y1 - (p - pmin) * (y1 - y0) / pr;
+  const ctx = Hm.ctx;
+  ctx.fillStyle = '#0B0E14'; ctx.fillRect(0, 0, Hm.w, Hm.h);
+  const cw = Math.max(1, (x1 - x0) / n), ch = Math.max(0.6, (y1 - y0) / pr);
+  const gamma = 0.55;
+  for (let j = 0; j < n; j++) {
+    const pairs = cols[j] || [];
+    const x = xCol(j);
+    for (let k = 0; k < pairs.length; k++) {
+      const p = pairs[k][0], v = pairs[k][1];
+      const t = Math.pow(Math.min(1, v / vmax), gamma);
+      ctx.fillStyle = hvnLerpC(t);
+      const y = yOf(p + 0.5);
+      ctx.fillRect(x, y, cw + 0.3, ch + 0.3);
+    }
+  }
+  // separatory sesji + 15:00 PL
+  ctx.lineWidth = 1;
+  for (let j = 1; j < n; j++) {
+    if (hours[j].s !== hours[j-1].s) {
+      ctx.strokeStyle = 'rgba(58,69,88,0.9)';
+      ctx.beginPath(); ctx.moveTo(xCol(j), y0); ctx.lineTo(xCol(j), y1); ctx.stroke();
+    }
+    if (hours[j].hh === 15) {
+      ctx.strokeStyle = 'rgba(42,51,68,0.7)'; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(xOf(j), y0); ctx.lineTo(xOf(j), y1); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  // świece H1
+  for (let j = 0; j < n; j++) {
+    const bar = h1[j]; if (!bar) continue;
+    const [O,H,L,C] = bar, up = C >= O, col = up ? '#3DDC97' : '#F07178';
+    const x = xOf(j);
+    ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.moveTo(x, yOf(H)); ctx.lineTo(x, yOf(L)); ctx.stroke();
+    const yb = yOf(Math.max(O, C)), yt = yOf(Math.min(O, C));
+    ctx.fillStyle = col; ctx.globalAlpha = 0.85;
+    ctx.fillRect(x - Math.max(0.6, cw * 0.28), yt, Math.max(1.2, cw * 0.56), Math.max(1, yb - yt));
+    ctx.globalAlpha = 1;
+  }
+  // poziomy HVN/LVN
+  const formIdx = (iso) => {
+    if (!iso) return 0;
+    let best = 0;
+    for (let j = 0; j < n; j++) { if (hours[j].t && hours[j].t >= iso) return j; best = j; }
+    return best;
+  };
+  const mitIdx = (iso) => {
+    if (!iso) return n - 1;
+    for (let j = 0; j < n; j++) if (hours[j].t && hours[j].t >= iso) return j;
+    return n - 1;
+  };
+  for (const lv of levels) {
+    const open = lv.status === 'otwarte' || lv.status === 'w_grze';
+    const col = lv.typ === 'HVN' ? (open ? '#FFC14A' : '#FF9F43') : (open ? '#7EC8F8' : '#5DA9E9');
+    const j0 = formIdx(lv.form_ts), j1 = open ? n - 1 : mitIdx(lv.mit_ts);
+    const y = yOf(lv.cena);
+    ctx.strokeStyle = col; ctx.lineWidth = open ? 1.4 : 1.1; ctx.globalAlpha = open ? 0.95 : 0.55;
+    if (open) ctx.setLineDash([5, 3]); else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xOf(j0), y); ctx.lineTo(xOf(j1), y); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    if (!open) {
+      ctx.strokeStyle = '#F4F1DE'; ctx.lineWidth = 1.2;
+      const xm = xOf(j1), ym = y;
+      if (lv.reakcja === 'odbicie') {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(xm, ym - 3.5); ctx.lineTo(xm + 3.5, ym); ctx.lineTo(xm, ym + 3.5); ctx.lineTo(xm - 3.5, ym);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.moveTo(xm - 3, ym - 3); ctx.lineTo(xm + 3, ym + 3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xm + 3, ym - 3); ctx.lineTo(xm - 3, ym + 3); ctx.stroke();
+      }
+    }
+  }
+  if (last != null) {
+    ctx.strokeStyle = '#F4F1DE'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(x0, yOf(last)); ctx.lineTo(x1, yOf(last)); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#F4F1DE'; ctx.font = '10px ui-monospace,monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(String(last), x0 + 2, yOf(last) - 2);
+  }
+  // osie
+  ctx.fillStyle = '#9AA3B2'; ctx.font = '10px ui-monospace,monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const step = pr > 400 ? 100 : (pr > 200 ? 50 : 25);
+  const p0 = Math.ceil(pmin / step) * step;
+  for (let p = p0; p <= pmax; p += step) {
+    const y = yOf(p);
+    ctx.fillText(String(p), L - 4, y);
+    ctx.strokeStyle = 'rgba(35,40,51,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  let lastLabX = -999;
+  for (let j = 0; j < n; j++) {
+    const sessStart = j === 0 || hours[j].s !== hours[j-1].s;
+    if (!sessStart) continue;
+    const x = xCol(j) + 2;
+    if (x - lastLabX < 42) continue;
+    lastLabX = x;
+    const s = hours[j].s || '';
+    const lab = s.length >= 10 ? s.slice(8, 10) + '.' + s.slice(5, 7) : (hours[j].lab || '').slice(0, 5);
+    ctx.fillStyle = '#9AA3B2';
+    ctx.fillText(lab, Math.min(x + 16, x1 - 10), y1 + 4);
+  }
+  ctx.textAlign = 'left'; ctx.fillText('H1', x0, y1 + 4);
+
+  // prawy profil: cały 3 tyg. w tle + niezmitygowane wyróżnione
+  const pctx = Pm.ctx, pw = Pm.w, ph = Pm.h;
+  pctx.fillStyle = '#10141C'; pctx.fillRect(0, 0, pw, ph);
+  const pL = 4, pR = 8, pT = T, pB = B;
+  const px0 = pL, px1 = pw - pR, py0 = pT, py1 = ph - pB;
+  const pyOf = (p) => py1 - (p - pmin) * (py1 - py0) / pr;
+  const prof = D.profile || [], popen = D.profile_open || [];
+  let pmaxV = 1;
+  for (const q of prof) if (q[1] > pmaxV) pmaxV = q[1];
+  const barMax = (px1 - px0) * 0.92;
+  pctx.fillStyle = '#2B3544';
+  for (const q of prof) {
+    const w = (q[1] / pmaxV) * barMax;
+    pctx.fillRect(px0, pyOf(q[0] + 0.5), w, Math.max(0.7, (py1 - py0) / pr));
+  }
+  pctx.fillStyle = '#FFC14A';
+  const openSet = new Set((D.open || []).filter(x => x.typ === 'HVN').map(x => x.cena));
+  const lvnSet = new Set((D.open || []).filter(x => x.typ === 'LVN').map(x => x.cena));
+  for (const q of popen) {
+    pctx.fillStyle = lvnSet.has(q[0]) && !openSet.has(q[0]) ? '#7EC8F8' : '#FFC14A';
+    const w = (q[1] / pmaxV) * barMax;
+    pctx.fillRect(px0, pyOf(q[0] + 0.5), w, Math.max(1.1, (py1 - py0) / pr));
+  }
+  for (const lv of (D.open || [])) {
+    pctx.strokeStyle = lv.typ === 'HVN' ? '#FFC14A' : '#7EC8F8';
+    pctx.lineWidth = 1; pctx.globalAlpha = 0.7;
+    pctx.beginPath(); pctx.moveTo(px0, pyOf(lv.cena)); pctx.lineTo(px1, pyOf(lv.cena)); pctx.stroke();
+    pctx.globalAlpha = 1;
+  }
+  if (last != null) {
+    pctx.strokeStyle = '#F4F1DE'; pctx.lineWidth = 1; pctx.setLineDash([2, 3]);
+    pctx.beginPath(); pctx.moveTo(px0, pyOf(last)); pctx.lineTo(px1, pyOf(last)); pctx.stroke();
+    pctx.setLineDash([]);
+  }
+  pctx.fillStyle = '#9AA3B2'; pctx.font = '9px "IBM Plex Sans Condensed",sans-serif';
+  pctx.textAlign = 'center'; pctx.textBaseline = 'top';
+  pctx.fillText('niezmitygowane', pw / 2, py1 + 4);
+
+  // tooltip
+  const tip = $('hvTip');
+  cH.onmousemove = ev => {
+    const r = cH.getBoundingClientRect();
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (x < x0 || x > x1 || y < y0 || y > y1) { tip.style.display = 'none'; return; }
+    const j = Math.max(0, Math.min(n - 1, Math.floor((x - x0) / (x1 - x0) * n)));
+    const price = Math.round(pmin + (y1 - y) / (y1 - y0) * pr);
+    const pairs = cols[j] || [];
+    let vol = 0; for (const q of pairs) if (q[0] === price) vol = q[1];
+    const near = (D.open || []).filter(lv => Math.abs(lv.cena - price) <= 1).map(lv => `${lv.typ} ${lv.cena}`).join(', ');
+    tip.style.display = 'block';
+    tip.style.left = Math.min(x + 12, r.width - 160) + 'px';
+    tip.style.top = Math.max(0, y - 28) + 'px';
+    tip.textContent = `${hours[j].lab || ''}  ·  ${price}  ·  vol ${vol}${near ? '  ·  ' + near : ''}`;
+  };
+  cH.onmouseleave = () => { tip.style.display = 'none'; };
+}
+addEventListener('resize', () => { if (S.hvw && HVN && !HVN.err) paintHvnWin(); });
