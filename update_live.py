@@ -1,25 +1,38 @@
 #!/usr/bin/env python3
-"""Scal świece M1 z flex/latest do magazynu sesji i wypchnij live/US500_live.json."""
+"""Scal świece M1 z flex/latest do magazynu sesji i wypchnij live/US500_live.json
+oraz bieżący dzień w formacie głównego widoku (live/US500_day.json)."""
 from __future__ import annotations
 
 import fcntl
 import json
+import math
 import os
 import stat
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta
+import zipfile
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 W = ZoneInfo("Europe/Warsaw")
+ET = ZoneInfo("America/New_York")
+UTC = ZoneInfo("UTC")
 SITE = Path(__file__).resolve().parent
 STORE = Path("/workspace/raporty/flex_live/store")
 LOCK = Path("/workspace/raporty/flex_live/.update_live.lock")
 LIVE = SITE / "live" / "US500_live.json"
+DAY_LIVE = SITE / "live" / "US500_day.json"
+US500_JSON = SITE / "data" / "US500.json"
 REPO = "https://github.com/tpaczoski/da-flow.git"
 REMOTE = "https://x-access-token@github.com/tpaczoski/da-flow.git"
+PACK_DIRS = [
+    Path("/workspace/raporty/da_flow_fx/out"),
+    Path("/workspace/raporty/da_flow_fx"),
+    Path("/home/box/agent-data/agents/6a24bd74-2328-4b41-9be0-ec6bf4eb2443/attachments/da_flow_fx"),
+]
 
 
 def err(msg: str, code: int = 1) -> None:
@@ -40,8 +53,8 @@ def minute_key(order_by: str) -> str:
         s = s[:-1] + "+00:00"
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-    dt = dt.astimezone(ZoneInfo("UTC")).replace(second=0, microsecond=0)
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC).replace(second=0, microsecond=0)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -142,12 +155,13 @@ def redact(s: str) -> str:
     return s
 
 
-def git_push_live(now_local: datetime) -> None:
-    """Commit i push tylko live/US500_live.json. Pomija, gdy brak zmian albo brak repo."""
+def git_push_live(now_local: datetime, paths: list[str] | None = None) -> None:
+    """Commit i push plików live (US500_live.json i ewentualnie US500_day.json)."""
     if not (SITE / ".git").is_dir():
         print("update_live: brak repozytorium git, pomijam push")
         return
-    # status tylko tego pliku
+    rels = paths or ["live/US500_live.json"]
+
     def run(args, **kw):
         r = subprocess.run(args, cwd=SITE, capture_output=True, text=True, **kw)
         if r.returncode != 0:
@@ -155,7 +169,6 @@ def git_push_live(now_local: datetime) -> None:
             err(f"git {' '.join(args[1:])} nie powiódł się: {out or r.returncode}")
         return r
 
-    # lokalna tożsamość, jeśli nieustawiona
     def cfg(key):
         r = subprocess.run(["git", "config", "--get", key], cwd=SITE, capture_output=True, text=True)
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -165,9 +178,9 @@ def git_push_live(now_local: datetime) -> None:
     if not cfg("user.email"):
         run(["git", "config", "user.email", "tpaczoski@users.noreply.github.com"])
 
-    run(["git", "add", "live/US500_live.json"])
+    run(["git", "add", *rels])
     diff = subprocess.run(
-        ["git", "diff", "--cached", "--quiet", "--", "live/US500_live.json"],
+        ["git", "diff", "--cached", "--quiet", "--", *rels],
         cwd=SITE,
     )
     if diff.returncode == 0:
@@ -185,11 +198,11 @@ def git_push_live(now_local: datetime) -> None:
     try:
         os.write(
             fd,
-            b'#!/bin/sh\n'
+            b"#!/bin/sh\n"
             b'case "$1" in\n'
-            b'  *Username*) echo x-access-token ;;\n'
+            b"  *Username*) echo x-access-token ;;\n"
             b'  *) printf %s "$GITHUB_DAFLOW_TOKEN" ;;\n'
-            b'esac\n',
+            b"esac\n",
         )
         os.close(fd)
         os.chmod(ask, stat.S_IRWXU)
@@ -213,6 +226,308 @@ def git_push_live(now_local: datetime) -> None:
             os.unlink(ask)
         except OSError:
             pass
+
+
+# --- dzień w toku dla głównego widoku DA Flow ---------------------------------
+
+def _pl_dt(session: str, hhmm: str) -> datetime:
+    h, m = map(int, hhmm.split(":"))
+    d = date.fromisoformat(session)
+    if h >= 20:
+        d = d - timedelta(days=1)
+    return datetime(d.year, d.month, d.day, h, m, tzinfo=W)
+
+
+def _etslot(session: str, hhmm: str, fl: str = "5min") -> str:
+    t = _pl_dt(session, hhmm).astimezone(ET)
+    if fl == "60min":
+        t = t.replace(minute=0, second=0, microsecond=0)
+    else:
+        t = t.replace(minute=t.minute - t.minute % 5, second=0, microsecond=0)
+    return t.strftime("%H:%M")
+
+
+def _is_rth(session: str, hhmm: str) -> int:
+    t = _pl_dt(session, hhmm).astimezone(ET)
+    return int(570 <= t.hour * 60 + t.minute < 960)
+
+
+def _sess_min(hhmm: str) -> int:
+    h, m = map(int, hhmm.split(":"))
+    return (h * 60 + m - 23 * 60) % 1440
+
+
+def _va(prof: dict, pct: float = 0.7):
+    if not prof:
+        return (None, None, None)
+    ps = sorted(prof)
+    v = [float(prof[p]) for p in ps]
+    i = max(range(len(v)), key=lambda k: v[k])
+    lo = hi = i
+    tot = sum(v)
+    acc = v[i]
+    while acc < pct * tot and (lo > 0 or hi < len(ps) - 1):
+        up = v[hi + 1] if hi < len(ps) - 1 else -1
+        dn = v[lo - 1] if lo > 0 else -1
+        if up >= dn:
+            hi += 1
+            acc += up
+        else:
+            lo -= 1
+            acc += dn
+    return ps[hi], ps[i], ps[lo]
+
+
+def _official_today(day: str):
+    """Wpis dnia z data/US500.json, jeśli jest."""
+    if not US500_JSON.is_file():
+        return None, {}
+    try:
+        data = json.loads(US500_JSON.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None, {}
+    if not isinstance(data, dict):
+        return None, {}
+    return data.get(day), data
+
+
+def _seed_from_pack(day: str):
+    cands = []
+    for d in PACK_DIRS:
+        if not d.is_dir():
+            continue
+        cands.extend(d.glob(f"DA_Flow_all_{day}_*.zip"))
+        cands.extend(d.glob(f"DA_Flow_all_{day}.zip"))
+    if not cands:
+        return None
+    zpath = max(cands, key=lambda p: p.stat().st_mtime)
+    try:
+        with zipfile.ZipFile(zpath) as z:
+            if "data/US500.json" not in z.namelist():
+                return None
+            data = json.loads(z.read("data/US500.json"))
+    except (OSError, zipfile.BadZipFile, json.JSONDecodeError):
+        return None
+    ses = data.get(day) if isinstance(data, dict) else None
+    if not ses or not ses.get("boxes"):
+        return None
+    return ses
+
+
+def _prev_avgs(us500: dict, today: str):
+    days = sorted(
+        d
+        for d, v in us500.items()
+        if isinstance(v, dict) and d < today and v.get("boxes") and not v.get("niepelna")
+    )[-5:]
+    sl5, sl60 = defaultdict(list), defaultdict(list)
+    for d in days:
+        ses = us500[d]
+        by = defaultdict(lambda: [0, 0])
+        for c in ses.get("cells") or []:
+            by[c[0]][0] += int(c[2] or 0)
+            by[c[0]][1] += int(c[3] or 0)
+        hour_tot = defaultdict(float)
+        for i, b in enumerate(ses["boxes"]):
+            vol = by[i][0] + by[i][1]
+            sl5[_etslot(d, b[0], "5min")].append(vol)
+            hour_tot[_etslot(d, b[0], "60min")] += vol
+        for hh, tot in hour_tot.items():
+            sl60[hh].append(tot)
+    if len(days) < 3:
+        return {}, {}
+    p5 = {k: (sum(v) / len(v)) for k, v in sl5.items() if v}
+    p60 = {k: (sum(v) / len(v)) for k, v in sl60.items() if v}
+    return p5, p60
+
+
+def _group_m1_complete(bars: list):
+    """Kompletne świece 5 min z M1 (t = początek minuty UTC) → (start PL, [(t, bar), ...])."""
+    groups = defaultdict(list)
+    for b in bars:
+        t = datetime.fromisoformat(b["t"].replace("Z", "+00:00")).astimezone(W)
+        h = t.replace(minute=t.minute - t.minute % 5, second=0, microsecond=0)
+        groups[h].append((t, b))
+    out = []
+    for h in sorted(groups):
+        items = sorted(groups[h], key=lambda x: x[0])
+        minutes = {t.replace(second=0, microsecond=0) for t, _ in items}
+        need = {h + timedelta(minutes=i) for i in range(5)}
+        if need.issubset(minutes):
+            out.append((h, items))
+    return out
+
+
+def _pick_seed(day: str, official, sidecar):
+    """Baza wczesnej sesji: oficjalny dzień (gdy jest), inaczej sidecar, inaczej paczka ZIP."""
+    # sfinalizowany dzień z push_daily – nie nadpisujemy
+    if official and official.get("boxes") and not official.get("niepelna"):
+        return official, "final"
+    cands = []
+    for label, ses in (("official", official), ("sidecar", sidecar), ("pack", _seed_from_pack(day))):
+        if ses and ses.get("boxes"):
+            cands.append((len(ses["boxes"]), _sess_min(ses["boxes"][-1][0]), label, ses))
+    if not cands:
+        return None, "none"
+    cands.sort()
+    return cands[-1][3], cands[-1][2]
+
+
+def build_today_day(day: str, m1_bars: list, updated: str, now_local: datetime) -> dict | None:
+    """Zbuduj wpis dnia w formacie data/US500.json (sesja w toku, bez duplikatu po push_daily)."""
+    official, us500 = _official_today(day)
+    sidecar = None
+    if DAY_LIVE.is_file():
+        try:
+            raw = json.loads(DAY_LIVE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict) and raw.get("session") == day and raw.get("boxes"):
+                sidecar = raw
+        except json.JSONDecodeError:
+            sidecar = None
+
+    seed, src_kind = _pick_seed(day, official, sidecar)
+    if src_kind == "final":
+        print(f"update_live: dzień {day} jest już sfinalizowany w data/US500.json – pomijam sidecar")
+        return None
+
+    p5, p60 = _prev_avgs(us500 or {}, day)
+    boxes, cells = [], []
+    cum: dict = defaultdict(float)
+    last_seed = -1
+    if seed and seed.get("boxes"):
+        boxes = [list(b) for b in seed["boxes"]]
+        cells = [list(c) for c in seed.get("cells") or []]
+        for c in cells:
+            cum[c[1]] += int(c[2] or 0) + int(c[3] or 0)
+        last_seed = _sess_min(boxes[-1][0])
+
+    added = 0
+    for h, items in _group_m1_complete(m1_bars):
+        hhmm = h.strftime("%H:%M")
+        if _sess_min(hhmm) <= last_seed:
+            continue
+        o = items[0][1]["o"]
+        hi = max(b["h"] for _, b in items)
+        lo = min(b["l"] for _, b in items)
+        c = items[-1][1]["c"]
+        lv: dict = defaultdict(lambda: [0, 0])
+        for _, b in items:
+            for p, bi, ak in b.get("lv") or []:
+                n = int(math.floor(float(p) / 1.0 + 1e-6))
+                lv[n][0] += int(bi or 0)
+                lv[n][1] += int(ak or 0)
+        lv = {n: v for n, v in lv.items() if v[0] or v[1]}
+        vol = sum(v[0] + v[1] for v in lv.values())
+        for n, v in lv.items():
+            cum[n] += v[0] + v[1]
+        vah, poc, val = _va({k: v for k, v in cum.items() if v > 0})
+        s5 = _etslot(day, hhmm, "5min")
+        x = round(vol / p5[s5], 2) if s5 in p5 and p5[s5] else None
+        et = h.astimezone(ET)
+        bi = len(boxes)
+        boxes.append([
+            hhmm,
+            round(float(o), 2),
+            round(float(hi), 2),
+            round(float(lo), 2),
+            round(float(c), 2),
+            None if vah is None else float(vah),
+            None if poc is None else float(poc),
+            None if val is None else float(val),
+            x,
+            _is_rth(day, hhmm),
+            0,
+            h.strftime("%H"),
+            et.strftime("%H"),
+            None,
+            None,
+            0,
+        ])
+        for n in sorted(lv):
+            cells.append([bi, int(n) if float(n).is_integer() else n, int(lv[n][0]), int(lv[n][1])])
+        added += 1
+
+    if not boxes:
+        return None
+
+    sl60: dict = defaultdict(float)
+    by: dict = defaultdict(lambda: [0, 0])
+    for c in cells:
+        by[c[0]][0] += int(c[2] or 0)
+        by[c[0]][1] += int(c[3] or 0)
+    for i, b in enumerate(boxes):
+        sl60[_etslot(day, b[0], "60min")] += by[i][0] + by[i][1]
+    hx = {}
+    for hh, v in sl60.items():
+        if hh in p60 and p60[hh]:
+            hx[hh] = round(float(v / p60[hh]), 2)
+
+    last = boxes[-1][0]
+    src_base = (seed.get("src") if seed else None) or "flex (rekonstrukcja) + live M1"
+    if "· SESJA NIEPEŁNA" in src_base:
+        src_base = src_base.split("· SESJA NIEPEŁNA")[0].rstrip()
+    src = f"{src_base} · SESJA NIEPEŁNA (odczyt {now_local:%H:%M} PL, ostatnia świeca {last})"
+    vix_open = seed.get("vix_open") if seed else None
+    vix = bool(seed.get("vix")) if seed else False
+    if vix_open is None:
+        vix_open = next((b[14] for b in boxes if b[9] and b[14] is not None), None)
+
+    print(
+        f"update_live: dzień w toku {day}: {len(boxes)} świec M5 "
+        f"(+{added} z magazynu M1, baza {src_kind}), ostatnia {last}"
+    )
+    return {
+        "ticker": "US500",
+        "session": day,
+        "updated_at": updated,
+        "src": src,
+        "boxes": boxes,
+        "cells": cells,
+        "h1x": hx,
+        "vix_open": vix_open,
+        "vix": vix,
+        "m1": None,
+        "niepelna": True,
+    }
+
+
+def _day_payload(obj: dict) -> tuple:
+    """Część, która ma znaczenie na wykresie (bez znacznika czasu odczytu)."""
+    return (
+        obj.get("session"),
+        obj.get("niepelna"),
+        len(obj.get("boxes") or []),
+        (obj["boxes"][-1][0], obj["boxes"][-1][4]) if obj.get("boxes") else None,
+        obj.get("h1x"),
+        len(obj.get("cells") or []),
+    )
+
+
+def write_today_day(day: str, m1_bars: list, updated: str, now_local: datetime) -> bool:
+    """Zapisz live/US500_day.json. Zwraca True, gdy świece/profil się zmieniły."""
+    obj = build_today_day(day, m1_bars, updated, now_local)
+    if obj is None:
+        return False
+    prev = None
+    if DAY_LIVE.is_file():
+        try:
+            prev = json.loads(DAY_LIVE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            prev = None
+    if prev and _day_payload(prev) == _day_payload(obj):
+        print(f"update_live: live/US500_day.json bez zmian ({len(obj['boxes'])} świec M5, sesja {day})")
+        return False
+    new = json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n"
+    DAY_LIVE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = DAY_LIVE.with_suffix(".json.tmp")
+    tmp.write_text(new, encoding="utf-8")
+    tmp.replace(DAY_LIVE)
+    last = obj["boxes"][-1]
+    print(
+        f"update_live: zapisano {DAY_LIVE.relative_to(SITE)} "
+        f"(sesja {day}, {len(obj['boxes'])} świec M5, ostatnia {last[0]}, close {last[4]})"
+    )
+    return True
 
 
 def main() -> None:
@@ -299,7 +614,7 @@ def main() -> None:
         if source_t:
             updated = source_t
         else:
-            updated = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            updated = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         # ujednolić ending
         if isinstance(updated, str) and updated.endswith("+00:00"):
             updated = updated[:-6] + "Z"
@@ -313,21 +628,24 @@ def main() -> None:
         old = LIVE.read_text(encoding="utf-8") if LIVE.is_file() else None
         new = json.dumps(live_obj, ensure_ascii=False, separators=(",", ":")) + "\n"
         LIVE.parent.mkdir(parents=True, exist_ok=True)
-        if old == new:
+        live_changed = old != new
+        if not live_changed:
             print(f"update_live: live/US500_live.json bez zmian ({len(bars)} świec, sesja {live_d})")
-            # i tak nic do commit – git_push_live sam to wykryje, ale skip szybciej
+        else:
+            tmp = LIVE.with_suffix(".json.tmp")
+            tmp.write_text(new, encoding="utf-8")
+            tmp.replace(LIVE)
+            last = bars[-1]
+            print(
+                f"update_live: zapisano {LIVE.relative_to(SITE)} "
+                f"(sesja {live_d}, {len(bars)} świec, ostatnia {last['t']}, close {last['c']})"
+            )
+
+        day_changed = write_today_day(live_d, bars, updated, now)
+        if not live_changed and not day_changed:
             print("update_live: bez zmian, pomijam push")
             return
-
-        tmp = LIVE.with_suffix(".json.tmp")
-        tmp.write_text(new, encoding="utf-8")
-        tmp.replace(LIVE)
-        last = bars[-1]
-        print(
-            f"update_live: zapisano {LIVE.relative_to(SITE)} "
-            f"(sesja {live_d}, {len(bars)} świec, ostatnia {last['t']}, close {last['c']})"
-        )
-        git_push_live(now)
+        git_push_live(now, ["live/US500_live.json", "live/US500_day.json"])
     finally:
         lock.close()
 
