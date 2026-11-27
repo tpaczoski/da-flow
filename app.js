@@ -3055,6 +3055,7 @@ function xhBindCta() {
 
 // v1.12 okno dwóch paneli profilu niezmitygowanego (US500)
 // v1.14 zoom wspólnej osi ceny w oknie dwóch paneli profilu niezmitygowanego
+// v1.16 trzeci panel: profil ost. 1 h zmitygowany ost. świecą M5 (ta sama logika co dzień vs 1 h)
 // P2Z / P2DATA zainicjowane na górze pliku, żeby przetrwać pierwsze render() i odświeżenie 5 min
 
 function p2IsZoomed() { return P2Z.zLo != null && P2Z.zHi != null && P2Z.zHi > P2Z.zLo; }
@@ -3165,20 +3166,29 @@ function drawP2Win(lastIdx){
   const inWin = i => { const tm = tHm(B[i][0]); return tm >= tStart && tm < tEnd; };
   const before = i => tHm(B[i][0]) < tStart;
 
-  let lhLo = Infinity, lhHi = -Infinity;
-  for (let i = 0; i <= lastI; i++) if (B[i] && inWin(i)) { lhLo = Math.min(lhLo, B[i][3]); lhHi = Math.max(lhHi, B[i][2]); }
+  let lhLo = Infinity, lhHi = -Infinity, nHour = 0, nApproxH = 0;
+  for (let i = 0; i <= lastI; i++) if (B[i] && inWin(i)) {
+    const b = B[i];
+    lhLo = Math.min(lhLo, b[3]); lhHi = Math.max(lhHi, b[2]);
+    nHour++;
+    if (b[10]) nApproxH++;
+  }
   if (!Number.isFinite(lhLo)) { lhLo = null; lhHi = null; }
+  const lastB = B[lastI];
+  const tM5 = lastB[0], m5Lo = lastB[3], m5Hi = lastB[2], m5Approx = !!lastB[10];
 
   const histAll = days.filter(k => k < day);
   const hist = histAll.slice(-22);
   const todayLo = Math.min.apply(null, B.filter((b, i) => b && i <= lastI).map(b => b[3]));
   const todayHi = Math.max.apply(null, B.filter((b, i) => b && i <= lastI).map(b => b[2]));
-  const price = B[lastI][4];
+  const price = lastB[4];
 
-  // zakres osi: dzień bieżący + ost. 1 h + margines 25% (kontekst poprzednich dni), bez ekstremów z nocnych sesji wstecz
+  // zakres osi: dzień bieżący + ost. 1 h + ost. M5 + margines 25% (kontekst poprzednich dni)
   let fullLo = todayLo, fullHi = todayHi;
   if (lhLo != null) fullLo = Math.min(fullLo, lhLo);
   if (lhHi != null) fullHi = Math.max(fullHi, lhHi);
+  if (m5Lo != null) fullLo = Math.min(fullLo, m5Lo);
+  if (m5Hi != null) fullHi = Math.max(fullHi, m5Hi);
   if (price != null) { fullLo = Math.min(fullLo, price); fullHi = Math.max(fullHi, price); }
   const near = Math.max((fullHi - fullLo) * 0.25, 40);
   fullLo -= near; fullHi += near;
@@ -3196,7 +3206,7 @@ function drawP2Win(lastIdx){
   };
   const isHit = (p, rr) => rr.some(r => r.lo != null && r.hi != null && r.lo <= p && p <= r.hi);
 
-  const G = {}, T = {}, E = {}, H = {};
+  const G = {}, T = {}, E = {}, H = {}, U = {}, M = {};
   hist.forEach((k, i) => {
     const V = pack[k], rr = laterRange(i);
     (V.cells || []).forEach(c => {
@@ -3210,62 +3220,80 @@ function drawP2Win(lastIdx){
     if (i > lastI || !(v > 0) || !B[i]) return;
     addBin(T, p, v, st);
     if (before(i)) addBin(E, p, v, st);
-    else if (inWin(i)) addBin(H, p, v, st);
+    else if (inWin(i)) {
+      addBin(H, p, v, st);
+      if (i === lastI) addBin(M, p, v, st);
+      else addBin(U, p, v, st);
+    }
   });
 
-  const keys = new Set([...Object.keys(G), ...Object.keys(T), ...Object.keys(E), ...Object.keys(H)].map(Number));
-  let sumG = 0, sumT = 0, sumH = 0, sumE = 0, sumEmit = 0, sumEunm = 0, nMit = 0, nUnm = 0, mxLfull = 1, mxRfull = 1;
+  const keys = new Set([...Object.keys(G), ...Object.keys(T), ...Object.keys(E), ...Object.keys(H), ...Object.keys(U), ...Object.keys(M)].map(Number));
+  let sumG = 0, sumT = 0, sumH = 0, sumE = 0, sumEmit = 0, sumEunm = 0, nMit = 0, nUnm = 0;
+  let sumU = 0, sumM = 0, sumUmit = 0, sumUunm = 0, nMit3 = 0, nUnm3 = 0;
+  let mxLfull = 1, mxRfull = 1, mx3full = 1;
   const overlaps = (k, a, b) => a != null && b != null && k <= b && k + st > a;
   keys.forEach(k => {
-    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0;
-    sumG += gv; sumT += tv; sumH += hv; sumE += ev;
+    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0, uv = U[k] || 0, mv = M[k] || 0;
+    sumG += gv; sumT += tv; sumH += hv; sumE += ev; sumU += uv; sumM += mv;
     mxLfull = Math.max(mxLfull, gv + tv);
     mxRfull = Math.max(mxRfull, ev, hv);
+    mx3full = Math.max(mx3full, uv, mv);
     if (ev > 0) { if (overlaps(k, lhLo, lhHi)) { sumEmit += ev; nMit++; } else { sumEunm += ev; nUnm++; } }
+    if (uv > 0) { if (overlaps(k, m5Lo, m5Hi)) { sumUmit += uv; nMit3++; } else { sumUunm += uv; nUnm3++; } }
   });
 
-  const tks = Object.keys(T).map(Number).sort((a, b) => a - b);
-  const tvs = tks.map(k => T[k]);
-  const totT = tvs.reduce((a, b) => a + b, 0);
-  let poc = null, vah = null, val = null;
-  if (tks.length) {
-    let pi = tvs.indexOf(Math.max.apply(null, tvs)), a0 = pi, a1 = pi, ac = tvs[pi];
-    while (ac < .7 * totT && (a0 > 0 || a1 < tks.length - 1)) {
-      const up = a1 < tks.length - 1 ? tvs[a1 + 1] : -1, dn = a0 > 0 ? tvs[a0 - 1] : -1;
-      if (up >= dn) ac += tvs[++a1]; else ac += tvs[--a0];
+  const vaFrom = (map) => {
+    const tks = Object.keys(map).map(Number).sort((a, b) => a - b);
+    const tvs = tks.map(k => map[k]);
+    const tot = tvs.reduce((a, b) => a + b, 0);
+    let poc = null, vah = null, val = null;
+    if (tks.length) {
+      let pi = tvs.indexOf(Math.max.apply(null, tvs)), a0 = pi, a1 = pi, ac = tvs[pi];
+      while (ac < .7 * tot && (a0 > 0 || a1 < tks.length - 1)) {
+        const up = a1 < tks.length - 1 ? tvs[a1 + 1] : -1, dn = a0 > 0 ? tvs[a0 - 1] : -1;
+        if (up >= dn) ac += tvs[++a1]; else ac += tvs[--a0];
+      }
+      poc = tks[pi] + st / 2; vah = tks[a1] + st; val = tks[a0];
     }
-    poc = tks[pi] + st / 2; vah = tks[a1] + st; val = tks[a0];
-  }
+    return {poc, vah, val};
+  };
+  const dayVA = vaFrom(T);
+  const poc = dayVA.poc, vah = dayVA.vah, val = dayVA.val;
 
   const d0 = hist[0] ? hist[0].slice(8, 10) + '.' + hist[0].slice(5, 7) : '';
   const d1 = hist.length ? hist[hist.length - 1].slice(8, 10) + '.' + hist[hist.length - 1].slice(5, 7) : '';
   const dayLab = day.slice(8, 10) + '.' + day.slice(5, 7) + '.' + day.slice(0, 4);
   const src = cur.src || pack[day].src || '';
-  const caveat = 'Prawy panel: baza to profil z godzin wcześniejszych niż ost. 1 h; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. 1 h (high/low świec M5), a nie przez dodanie wolumenu ost. godziny. Cienki pomarańcz to wolumen ost. 1 h (kontekst). Źródło: komórki footprintu M5 DA Flow (bid+ask).'
-    + (src ? ' ' + src + '.' : '');
+  const caveat = 'Środkowy panel: baza to profil z godzin wcześniejszych niż ost. 1 h; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. 1 h (high/low świec M5), a nie przez dodanie wolumenu ost. godziny. Cienki pomarańcz to wolumen ost. 1 h (kontekst). '
+    + 'Trzeci panel: ta sama logika jeden poziom niżej. Baza to profil ost. 1 h bez ost. świecy M5; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. świecy M5 (high/low), a nie przez dodanie jej wolumenu. Cienki pomarańcz to wolumen ost. świecy M5 (kontekst). '
+    + 'Źródło: komórki footprintu M5 DA Flow (bid+ask).'
+    + (src ? ' ' + src + '.' : '')
+    + (m5Approx ? ` Ost. świeca M5 ${tM5} ma znacznik przybliżenia (pole approx).` : '')
+    + ' Flaga fp5_demo z raportu godzinowego tu nie występuje – podział wolumenu na świece M5 pochodzi z tych samych komórek co pozostałe panele.';
 
   const key = (typeof INST !== 'undefined' ? INST : 'US500') + '|' + day;
   if (P2Z.key !== key) { P2Z.key = key; P2Z.day = day; P2Z.inst = INST; P2Z.zLo = P2Z.zHi = null; }
 
-  P2DATA = { G, T, E, H, st, fullLo, fullHi, keys, overlaps, lhLo, lhHi, sumG, sumT, sumH, sumE, sumEmit, sumEunm, nMit, nUnm, mxLfull, mxRfull, poc, vah, val, todayLo, todayHi, price, t0, t1, fmtN, fmtP, dayLab, d0, d1, hist, day, caveat, niceStep };
-  $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
+  P2DATA = { G, T, E, H, U, M, st, fullLo, fullHi, keys, overlaps, lhLo, lhHi, m5Lo, m5Hi, tM5, m5Approx, nHour, nApproxH, sumG, sumT, sumH, sumE, sumEmit, sumEunm, nMit, nUnm, sumU, sumM, sumUmit, sumUunm, nMit3, nUnm3, mxLfull, mxRfull, mx3full, poc, vah, val, todayLo, todayHi, price, t0, t1, tf, fmtN, fmtP, dayLab, d0, d1, hist, day, caveat, niceStep };
+  $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${nHour ? ' · ' + nHour + '×M5' : ''} · ost. M5 ${tM5}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
   paintP2Win();
   p2Bind();
 }
 
 function paintP2Win(){
   if (!P2DATA || !S.p2w || !$('p2WinB')) return;
-  const D = P2DATA, {G, T, E, H, st, keys, overlaps, lhLo, lhHi, fmtN, fmtP, niceStep} = D;
+  const D = P2DATA, {G, T, E, H, U, M, st, keys, overlaps, lhLo, lhHi, m5Lo, m5Hi, fmtN, fmtP, niceStep} = D;
   const v = p2Vis(), lo = v.lo, hi = v.hi;
   const scaleView = P2Z.scaleView !== false;
-  let mxL = 1, mxR = 1;
+  let mxL = 1, mxR = 1, mx3 = 1;
   if (scaleView) {
     keys.forEach(k => {
       if (k + st <= lo || k >= hi) return;
       mxL = Math.max(mxL, (G[k] || 0) + (T[k] || 0));
       mxR = Math.max(mxR, E[k] || 0, H[k] || 0);
+      mx3 = Math.max(mx3, U[k] || 0, M[k] || 0);
     });
-  } else { mxL = D.mxLfull; mxR = D.mxRfull; }
+  } else { mxL = D.mxLfull; mxR = D.mxRfull; mx3 = D.mx3full; }
 
   const dark = document.documentElement.getAttribute('data-theme') === 'dark' ||
     (!document.documentElement.getAttribute('data-theme') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -3274,12 +3302,15 @@ function paintP2Win(){
   const mut = (typeof css === 'function' ? css('--mut') : null) || (dark ? '#aaa' : '#6B7280');
   const grid = (typeof css === 'function' ? css('--line') : null) || (dark ? '#333' : '#E5E7EB');
 
-  const W = 1180, Hgt = 660, pl = 16, pr = 72, pt = 36, pb = 128, gap = 36;
-  const axisW = 56, mid = W - pr - axisW, paneW = (mid - pl - gap) / 2;
-  const xL0 = pl, xR0 = pl + paneW + gap, y0 = pt, ph = Hgt - pt - pb;
+  const W = 1500, Hgt = 660, pl = 14, pr = 70, pt = 36, pb = 128, gap = 22;
+  const axisW = 54, mid = W - pr - axisW;
+  const paneW = (mid - pl - gap * 2) / 3;
+  const xL0 = pl, xR0 = pl + paneW + gap, xH0 = xR0 + paneW + gap;
+  const y0 = pt, ph = Hgt - pt - pb;
   const y = p => y0 + (hi - p) / (hi - lo) * ph;
   const xLenL = vv => (vv / mxL) * (paneW - 8);
   const xLenR = vv => (vv / mxR) * (paneW - 8);
+  const xLen3 = vv => (vv / mx3) * (paneW - 8);
   const bh = Math.max(1.2, (st / (hi - lo)) * ph - 0.4);
   const showLabs = bh >= 8;
 
@@ -3287,6 +3318,7 @@ function paintP2Win(){
   g += `<defs><pattern id="dafP2hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${COL.mith}" stroke-width="1.6"/></pattern>`;
   g += `<clipPath id="dafP2clipL"><rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath>`;
   g += `<clipPath id="dafP2clipR"><rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath>`;
+  g += `<clipPath id="dafP2clip3"><rect x="${xH0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath>`;
   g += `<clipPath id="dafP2clipU"><rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}"/><rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath></defs>`;
   const gridStep = niceStep((hi - lo) / 8);
   for (let p = Math.ceil(lo / gridStep) * gridStep; p <= hi + 1e-9; p += gridStep) {
@@ -3294,17 +3326,19 @@ function paintP2Win(){
     if (yy < y0 - 2 || yy > y0 + ph + 2) continue;
     g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
+    g += `<line x1="${xH0}" x2="${xH0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
     g += `<text x="${W - pr + 6}" y="${yy + 4}" font-size="11" fill="${mut}" font-family="IBM Plex Mono,monospace">${fmtN(p, gridStep < 1 ? 2 : 0)}</text>`;
   }
   g += `<text x="${xL0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Poprzednie dni vs dziś</text>`;
   g += `<text x="${xR0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Dziś wcześniej · mitygacja ost. 1 h</text>`;
+  g += `<text x="${xH0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Ost. 1 h · mitygacja ost. M5</text>`;
 
   const ks = [...keys].sort((a, b) => a - b);
-  let maxK = null, maxV = -1, bars = '', cands = [];
+  let maxK = null, maxV = -1, bars = '', bars3 = '', cands = [];
   ks.forEach(k => {
     if (k + st <= lo || k >= hi) return;
     const yy = y(k + st);
-    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0;
+    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0, uv = U[k] || 0, mv = M[k] || 0;
     if (gv > 0) bars += `<rect x="${xL0}" y="${yy}" width="${xLenL(gv).toFixed(2)}" height="${bh}" fill="${COL.prior}"/>`;
     if (tv > 0) bars += `<rect x="${xL0 + xLenL(gv)}" y="${yy}" width="${xLenL(tv).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`;
     if (hv > 0) {
@@ -3320,11 +3354,20 @@ function paintP2Win(){
       const ow = Math.max(1.5, xLenR(hv) * 0.55);
       bars += `<rect x="${xR0}" y="${yy}" width="${ow.toFixed(2)}" height="${Math.max(1, bh * 0.7)}" fill="${COL.hour}" fill-opacity="0.92"/>`;
     }
+    const mit3 = overlaps(k, m5Lo, m5Hi);
+    if (uv > 0) {
+      if (mit3) { bars3 += `<rect x="${xH0}" y="${yy}" width="${xLen3(uv).toFixed(2)}" height="${bh}" fill="#D5DAE0"/><rect x="${xH0}" y="${yy}" width="${xLen3(uv).toFixed(2)}" height="${bh}" fill="url(#dafP2hatch)"/>`; }
+      else { bars3 += `<rect x="${xH0}" y="${yy}" width="${xLen3(uv).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`; }
+    }
+    if (mv > 0) {
+      const ow = Math.max(1.5, xLen3(mv) * 0.55);
+      bars3 += `<rect x="${xH0}" y="${yy}" width="${ow.toFixed(2)}" height="${Math.max(1, bh * 0.7)}" fill="${COL.hour}" fill-opacity="0.92"/>`;
+    }
     const tot = gv + tv;
     if (tot > maxV) { maxV = tot; maxK = k; }
-    if (showLabs && (tot > 0 || ev > 0 || hv > 0)) cands.push({k, yy, tot, ev, hv, mit, gv, tv});
+    if (showLabs && (tot > 0 || ev > 0 || hv > 0 || uv > 0 || mv > 0)) cands.push({k, yy, tot, ev, hv, uv, mv, mit, mit3, gv, tv});
   });
-  cands.sort((a, b) => (b.tot + b.ev) - (a.tot + a.ev));
+  cands.sort((a, b) => (b.tot + b.ev + b.uv) - (a.tot + a.ev + a.uv));
   const labGap = Math.max(11, bh + 1);
   const placed = [];
   const free = ty => placed.every(q => Math.abs(q - ty) >= labGap);
@@ -3346,22 +3389,35 @@ function paintP2Win(){
       const txR = insideR ? endR - 4 : Math.min(endR + 4, xR0 + paneW - 4);
       bars += `<text x="${txR}" y="${ty}" text-anchor="${insideR ? 'end' : 'start'}" font-size="9.5" font-weight="600" fill="${insideR ? '#fff' : ink}" font-family="IBM Plex Mono,monospace">${labR}</text>`;
     }
+    if (c.uv > 0 || c.mv > 0) {
+      const lab3 = `${fmtP(c.k)} · ${fmtN(c.uv || c.mv, 0)}${c.mit3 && c.uv ? ' zm' : ''}`;
+      const end3 = xH0 + xLen3(Math.max(c.uv, c.mv));
+      const inside3 = end3 - xH0 > 86;
+      const tx3 = inside3 ? end3 - 4 : Math.min(end3 + 4, xH0 + paneW - 4);
+      bars3 += `<text x="${tx3}" y="${ty}" text-anchor="${inside3 ? 'end' : 'start'}" font-size="9.5" font-weight="600" fill="${inside3 ? '#fff' : ink}" font-family="IBM Plex Mono,monospace">${lab3}</text>`;
+    }
   });
   if (maxK != null) {
     const yy = y(maxK + st);
     bars += `<rect x="${xL0}" y="${yy}" width="${xLenL(maxV).toFixed(2)}" height="${bh}" fill="none" stroke="${COL.gold}" stroke-width="1.2"/>`;
   }
   g += `<g clip-path="url(#dafP2clipU)">${bars}</g>`;
+  g += `<g clip-path="url(#dafP2clip3)">${bars3}</g>`;
 
-  if (lhLo != null && lhHi != null) {
-    const yTop = y(lhHi), yBot = y(lhLo);
-    g += `<g clip-path="url(#dafP2clipR)"><rect x="${xR0}" y="${yTop}" width="${paneW}" height="${Math.max(1, yBot - yTop)}" fill="${COL.band}"/>`;
-    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yTop}" y2="${yTop}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
-    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yBot}" y2="${yBot}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
-    if (yTop >= y0 && yTop <= y0 + ph) g += `<text x="${xR0 + paneW - 4}" y="${yTop - 3}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">hi ost. 1 h ${fmtP(lhHi)}</text>`;
-    if (yBot >= y0 && yBot <= y0 + ph) g += `<text x="${xR0 + paneW - 4}" y="${yBot + 11}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">lo ost. 1 h ${fmtP(lhLo)}</text></g>`;
-    else g += `</g>`;
-  }
+  const rangeBand = (x0, clip, loP, hiP, labHi, labLo) => {
+    if (loP == null || hiP == null) return '';
+    const yTop = y(hiP), yBot = y(loP);
+    let o = `<g clip-path="url(#${clip})"><rect x="${x0}" y="${yTop}" width="${paneW}" height="${Math.max(1, yBot - yTop)}" fill="${COL.band}"/>`;
+    o += `<line x1="${x0}" x2="${x0 + paneW}" y1="${yTop}" y2="${yTop}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
+    o += `<line x1="${x0}" x2="${x0 + paneW}" y1="${yBot}" y2="${yBot}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
+    if (yTop >= y0 && yTop <= y0 + ph) o += `<text x="${x0 + paneW - 4}" y="${yTop - 3}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">${labHi} ${fmtP(hiP)}</text>`;
+    if (yBot >= y0 && yBot <= y0 + ph) o += `<text x="${x0 + paneW - 4}" y="${yBot + 11}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">${labLo} ${fmtP(loP)}</text></g>`;
+    else o += `</g>`;
+    return o;
+  };
+  g += rangeBand(xR0, 'dafP2clipR', lhLo, lhHi, 'hi ost. 1 h', 'lo ost. 1 h');
+  g += rangeBand(xH0, 'dafP2clip3', m5Lo, m5Hi, 'hi ost. M5', 'lo ost. M5');
+
   const lvls = [
     [D.todayHi, 'High', mut], [D.vah, 'VAH', mut], [D.poc, 'POC', COL.gold], [D.val, 'VAL', mut], [D.todayLo, 'Low', mut], [D.price, 'cena', COL.price]
   ];
@@ -3370,6 +3426,7 @@ function paintP2Win(){
     const yy = y(p), dash = lab === 'cena' ? '5 4' : '3 4', sw = (lab === 'cena' || lab === 'POC') ? 1.3 : 0.9;
     g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
+    g += `<line x1="${xH0}" x2="${xH0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
   });
   if (D.price != null && D.price >= lo && D.price <= hi) {
     const yy = y(D.price);
@@ -3378,10 +3435,10 @@ function paintP2Win(){
   }
   g += `<rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
   g += `<rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
-  // axis hit area (przezroczysta), do przeciągania pionowego
+  g += `<rect x="${xH0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
   g += `<rect id="p2axis" x="${W - pr - axisW}" y="${y0}" width="${axisW + pr}" height="${ph}" fill="transparent"/>`;
 
-  const fy = Hgt - pb + 20, pct = D.sumE > 0 ? (100 * D.sumEmit / D.sumE) : 0;
+  const fy = Hgt - pb + 20, pct = D.sumE > 0 ? (100 * D.sumEmit / D.sumE) : 0, pct3 = D.sumU > 0 ? (100 * D.sumUmit / D.sumU) : 0;
   const swatch = (x, yy, col, hatch) => {
     let o = `<rect x="${x}" y="${yy - 8}" width="10" height="10" fill="${col}" ${hatch ? 'stroke="#8B949E"' : ''}/>`;
     if (hatch) o += `<rect x="${x}" y="${yy - 8}" width="10" height="10" fill="url(#dafP2hatch)"/>`;
@@ -3391,15 +3448,18 @@ function paintP2Win(){
   g += line(xL0, fy, COL.prior, `poprzednie dni  suma ${fmtN(D.sumG, 0)}`);
   g += line(xL0, fy + 16, COL.today, `dziś (bez ost. 1 h)  suma ${fmtN(D.sumT - D.sumH, 0)}`);
   g += line(xL0, fy + 32, COL.hour, `ost. 1 h  ${D.t0}–${D.t1}  suma ${fmtN(D.sumH, 0)}`);
-  g += line(xL0, fy + 48, COL.gold, `max / POC`);
+  g += line(xL0, fy + 48, COL.gold, `max / POC dnia`);
   g += line(xR0, fy, COL.today, `dziś wcześniej – niezmitygowane  suma ${fmtN(D.sumEunm, 0)}  (${D.nUnm} bin)`);
   g += line(xR0, fy + 16, '#D5DAE0', `zmitygowane w ost. 1 h  suma ${fmtN(D.sumEmit, 0)}  (${D.nMit} bin, ${fmtN(pct, 1)}%)`, true);
   g += line(xR0, fy + 32, COL.hour, `ost. 1 h (cienki pasek)  suma ${fmtN(D.sumH, 0)}`);
-  g += `<text x="${xL0}" y="${fy + 70}" font-size="10.5" fill="${mut}" font-family="IBM Plex Sans,sans-serif">Zakres ost. 1 h (M5 high/low): ${lhLo != null ? fmtP(lhLo) : '–'} – ${lhHi != null ? fmtP(lhHi) : '–'} · krok bin ${fmtN(st, st < 1 ? 2 : 0)} · POC ${D.poc != null ? fmtP(D.poc) : '–'}  VAH ${D.vah != null ? fmtP(D.vah) : '–'}  VAL ${D.val != null ? fmtP(D.val) : '–'}</text>`;
+  g += line(xH0, fy, COL.today, `ost. 1 h bez ost. M5 – niezmitygowane  suma ${fmtN(D.sumUunm, 0)}  (${D.nUnm3} bin)`);
+  g += line(xH0, fy + 16, '#D5DAE0', `zmitygowane ost. M5 ${D.tM5}  suma ${fmtN(D.sumUmit, 0)}  (${D.nMit3} bin, ${fmtN(pct3, 1)}%)`, true);
+  g += line(xH0, fy + 32, COL.hour, `ost. M5 (cienki pasek)  ${D.tM5}  suma ${fmtN(D.sumM, 0)}`);
+  g += `<text x="${xL0}" y="${fy + 70}" font-size="10.5" fill="${mut}" font-family="IBM Plex Sans,sans-serif">Zakres ost. 1 h (M5 high/low): ${lhLo != null ? fmtP(lhLo) : '–'} – ${lhHi != null ? fmtP(lhHi) : '–'} · zakres ost. M5 ${D.tM5}: ${m5Lo != null ? fmtP(m5Lo) : '–'} – ${m5Hi != null ? fmtP(m5Hi) : '–'} · krok bin ${fmtN(st, st < 1 ? 2 : 0)} · POC ${D.poc != null ? fmtP(D.poc) : '–'}  VAH ${D.vah != null ? fmtP(D.vah) : '–'}  VAL ${D.val != null ? fmtP(D.val) : '–'}</text>`;
 
-  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh);cursor:crosshair" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}<g id="p2sel" pointer-events="none"></g><g id="p2xh" pointer-events="none"></g></svg><p class="note">${D.caveat}</p>`;
-  window._P2_DAF = { t0: D.t0, t1: D.t1, lhLo, lhHi, st, sumE: D.sumE, sumEmit: D.sumEmit, sumEunm: D.sumEunm, sumH: D.sumH, sumG: D.sumG, sumT: D.sumT, nMit: D.nMit, nUnm: D.nUnm, price: D.price, poc: D.poc, day: D.day, lo, hi, fullLo: D.fullLo, fullHi: D.fullHi };
-  window.P2XH = { W, Hgt, xL0, xR0, paneW, y0, ph, lo, hi, st, G, T, E, Hmap: H, fmtP, fmtN, pr, axisW, lhLo, lhHi };
+  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh);cursor:crosshair" role="img" aria-label="Trzy panele profilu niezmitygowanego, ost. 1 h zmitygowana ost. świecą M5">${g}<g id="p2sel" pointer-events="none"></g><g id="p2xh" pointer-events="none"></g></svg><p class="note">${D.caveat}</p>`;
+  window._P2_DAF = { t0: D.t0, t1: D.t1, tM5: D.tM5, lhLo, lhHi, m5Lo, m5Hi, st, sumE: D.sumE, sumEmit: D.sumEmit, sumEunm: D.sumEunm, sumH: D.sumH, sumG: D.sumG, sumT: D.sumT, sumU: D.sumU, sumM: D.sumM, sumUmit: D.sumUmit, sumUunm: D.sumUunm, nMit: D.nMit, nUnm: D.nUnm, nMit3: D.nMit3, nUnm3: D.nUnm3, nHour: D.nHour, price: D.price, poc: D.poc, day: D.day, lo, hi, fullLo: D.fullLo, fullHi: D.fullHi };
+  window.P2XH = { W, Hgt, xL0, xR0, xH0, paneW, pane3W: paneW, y0, ph, lo, hi, st, G, T, E, Hmap: H, U, M, fmtP, fmtN, pr, axisW, lhLo, lhHi, m5Lo, m5Hi, tM5: D.tM5 };
 
   if ($('p2Zr')) $('p2Zr').disabled = !p2IsZoomed();
   if ($('p2Zs')) $('p2Zs').checked = P2Z.scaleView !== false;
@@ -3409,32 +3469,48 @@ function paintP2Win(){
 function p2Bind() {
   const box = $('p2WinB'); if (!box || box.dataset.xhBound) return; box.dataset.xhBound = '1';
   const offXh = () => { const g = $('p2xh'); if (g && !P2Z.drag) g.innerHTML = ''; };
+  const hit = (P, X) => {
+    if (!P || !X) return {};
+    const {xL0, xR0, xH0, paneW, y0, ph, W, pr, axisW} = X;
+    const inY = P.y >= y0 - 2 && P.y <= y0 + ph + 2;
+    return {
+      inY,
+      inL: inY && P.x >= xL0 && P.x <= xL0 + paneW,
+      inR: inY && P.x >= xR0 && P.x <= xR0 + paneW,
+      in3: inY && P.x >= xH0 && P.x <= xH0 + paneW,
+      inAx: inY && P.x >= W - pr - axisW && P.x <= W - pr + 8
+    };
+  };
   const moveXh = e => {
     if (P2Z.drag) return;
     const X = window.P2XH, sv = e.target.closest && e.target.closest('#p2svg'); if (!X || !sv) { offXh(); return; }
     const P = p2SvgPoint(sv, e); if (!P) return;
-    const {xL0, xR0, paneW, y0, ph, lo, hi, st, W, pr, axisW} = X;
-    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW && P.x <= W - pr + 8;
-    if (P.y < y0 - 2 || P.y > y0 + ph + 2 || !(inL || inR || inAx)) { offXh(); return; }
+    const Ht = hit(P, X);
+    if (!(Ht.inL || Ht.inR || Ht.in3 || Ht.inAx)) { offXh(); return; }
+    const {xL0, xR0, xH0, paneW, y0, ph, lo, hi, st, W, pr, axisW} = X;
     const p = hi - (P.y - y0) / ph * (hi - lo), Y = Math.max(y0, Math.min(y0 + ph, P.y));
-    const k = Math.floor(p / st + 1e-9) * st, gv = X.G[k] || 0, tv = X.T[k] || 0, ev = X.E[k] || 0, hv = X.Hmap[k] || 0;
+    const k = Math.floor(p / st + 1e-9) * st, gv = X.G[k] || 0, tv = X.T[k] || 0, ev = X.E[k] || 0, hv = X.Hmap[k] || 0, uv = (X.U && X.U[k]) || 0, mv = (X.M && X.M[k]) || 0;
     const mit = X.lhLo != null && X.lhHi != null && k <= X.lhHi && k + st > X.lhLo;
+    const mit3 = X.m5Lo != null && X.m5Hi != null && k <= X.m5Hi && k + st > X.m5Lo;
     const lab = X.fmtP(p), ink = 'var(--ewr)', pan = '#fff';
     let vol = `lewy poprz. ${X.fmtN(gv, 0)} + dziś ${X.fmtN(tv, 0)}`;
     if (hv) vol += ` · 1 h ${X.fmtN(hv, 0)}`;
-    vol += ` · prawy ${X.fmtN(ev, 0)}${mit ? ' (zmityg.)' : ' (niezmityg.)'}`;
+    vol += ` · śr. ${X.fmtN(ev, 0)}${mit ? ' (zmityg.)' : ' (niezmityg.)'}`;
+    vol += ` · 1h ${X.fmtN(uv, 0)}${mit3 ? ' (zmityg. M5)' : ' (niezmityg.)'}`;
+    if (mv) vol += ` · ost. M5 ${X.fmtN(mv, 0)}`;
     const wl = Math.max(axisW - 4, lab.length * 6.6 + 10), bx = W - pr - axisW + (axisW - wl) / 2;
-    const vw = Math.min(420, vol.length * 6.2 + 12), vx = Math.max(xL0, Math.min(xR0 + paneW - vw, (inR ? xR0 : xL0) + 8)), vy = Y + 20 > y0 + ph - 4 ? Y - 22 : Y + 10;
+    const vw = Math.min(560, vol.length * 6.2 + 12);
+    const vx = Math.max(xL0, Math.min(xH0 + paneW - vw, (Ht.in3 ? xH0 : (Ht.inR ? xR0 : xL0)) + 8));
+    const vy = Y + 20 > y0 + ph - 4 ? Y - 22 : Y + 10;
     if ($('p2xh')) $('p2xh').innerHTML = `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
       + `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
+      + `<line x1="${xH0}" x2="${xH0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
       + `<rect x="${bx}" y="${Y - 8}" width="${wl}" height="16" rx="3" fill="${ink}"/><text x="${bx + wl / 2}" y="${Y + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${lab}</text>`
       + `<rect x="${vx}" y="${vy}" width="${vw}" height="16" rx="3" fill="${ink}"/><text x="${vx + vw / 2}" y="${vy + 12}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${vol}</text>`;
   };
   const inPlot = (P, X) => {
-    if (!P || !X) return false;
-    const {xL0, xR0, paneW, y0, ph, W, pr, axisW} = X;
-    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW;
-    return P.y >= y0 - 2 && P.y <= y0 + ph + 2 && (inL || inR || inAx);
+    const Ht = hit(P, X);
+    return !!(Ht.inL || Ht.inR || Ht.in3 || Ht.inAx);
   };
   const onWheel = e => {
     const sv = e.target.closest && e.target.closest('#p2svg'); if (!sv || !P2DATA) return;
@@ -3486,10 +3562,10 @@ function p2Bind() {
       paintP2WinSoon();
       return;
     }
-    // rubber-band
     const yA = Math.min(P2Z.drag.y0, Y), yB = Math.max(P2Z.drag.y0, Y);
     if ($('p2sel')) $('p2sel').innerHTML = `<rect x="${X.xL0}" y="${yA}" width="${X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`
-      + `<rect x="${X.xR0}" y="${yA}" width="${X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`;
+      + `<rect x="${X.xR0}" y="${yA}" width="${X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`
+      + `<rect x="${X.xH0}" y="${yA}" width="${X.pane3W || X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`;
     if ($('p2xh')) $('p2xh').innerHTML = '';
   };
   const onUp = e => {
