@@ -2,7 +2,7 @@
 let DATA = JSON.parse(document.getElementById('data').textContent);
 // instrumenty DA Flow: krok bazowy (dokładnie reprezentowalny w liczbach binarnych) i miejsca po przecinku
 const INSTS = {US500: [1, 1], US100: [2.5, 1], US30: [2.5, 0], RTY: [0.5, 1], SPY: [0.25, 2], GOLD: [0.5, 1], DE40: [2.5, 1], FR40: [1, 1], EU50: [1, 0], UK100: [2.5, 1], J225: [10, 0], HK50: [5, 0], CN50: [10, 0], VIX: [0.25, 2], EURUSD: [0.0001, 5], DXY: [0.01, 3], GBPUSD: [0.0001, 5], USDJPY: [0.01, 3], USDCHF: [0.0001, 5], USDCAD: [0.0001, 5], AUDUSD: [0.0001, 5], NZDUSD: [0.0001, 5], EURGBP: [0.0001, 5], EURCHF: [0.0001, 5], GBPJPY: [0.01, 3], AUDJPY: [0.01, 3], AUDCAD: [0.0001, 5], GBPCAD: [0.0001, 5], NZDJPY: [0.01, 3], EURPLN: [0.0005, 4], USDPLN: [0.0005, 4], USDHKD: [0.0001, 4], OIL_CRUDE: [0.05, 3], SILVER: [0.05, 3], NATURALGAS: [0.001, 4], COPPER: [0.001, 4], BTCUSD: [25, 2], ETHUSD: [1.25, 2], QQQ: [0.25, 2]};
-/* FX (paczka 13.11) */ const Q = v => Math.round(v * 1e9) / 1e9, PXF = v => (+v).toFixed(Math.max(1, DEC));
+/* FX (paczka 13.11) */ const Q = v => Math.round(v * 1e9) / 1e9, PXF = v => (+v).toFixed(Math.max(1, DEC)), XHP = v => PXF(v).replace('.', ',');
 let INST = 'US500', TK = 1, DEC = 1;
 const CACHE = {US500: DATA};
 let MAKRO = null, MAKRO_ST = 0;   // kalendarz makro (data/makro.json), wczytywany przy pierwszym użyciu
@@ -50,6 +50,7 @@ try { const raw = localStorage.getItem('fp-us500'); if (raw) FIRST_VISIT = false
 if (/(?:^|[?&])hvn=1(?:&|$)/.test(location.search)) S.hvw = true;
 if (/(?:^|[?&])cta=1(?:&|$)/.test(location.search)) S.ctw = true;
 if (/(?:^|[?&])p2=1(?:&|$)/.test(location.search)) S.p2w = true;
+if (/(?:^|[?&])dp=1(?:&|$)/.test(location.search)) S.dp = true;
 if (/(?:^|[?&])opcje=1(?:&|$)/.test(location.search)) { S.gxm = true; S.sig = true; }
 if (/(?:^|[?&])compact=1(?:&|$)/.test(location.search)) S.ctrlOpen = false;
 { const md = location.search.match(/(?:^|[?&])day=(\d{4}-\d{2}-\d{2})/); if (md) S.day = md[1]; }
@@ -153,10 +154,12 @@ function cross(e) {
     g += `<rect x="${i0 * L.CW}" y="${y0}" width="${(i1 - i0 + 1) * L.CW}" height="${Math.abs(yy - DRAG.y)}" fill="${va}" opacity=".10" stroke="${va}" stroke-width="1.2"/>`;
     g += `<g><rect x="${x + 10}" y="${yy + 8}" width="200" height="46" rx="4" fill="${pan}" stroke="${va}"/><text x="${x + 18}" y="${yy + 24}" font-size="10.5" font-weight="700" fill="${dp >= 0 ? css('--buy') : css('--sell')}">${dp >= 0 ? '+' : ''}${PXF(dp)} pkt · ${i1 - i0 + 1} świec</text><text x="${x + 18}" y="${yy + 40}" font-size="10" fill="${ink}">Δ ${sd > 0 ? '+' : ''}${sd} · wol ${sv} · puść, by dodać profil</text></g>`; }
   $('xh').innerHTML = g;
-  $('xha').innerHTML = `<rect x="2" y="${yy - 8}" width="60" height="16" rx="3" fill="${va}"/><text x="32" y="${yy + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}">${PXF(p)}</text>`;
-  $('xhf').innerHTML = `<rect x="${i * L.CW + 2}" y="1" width="${L.CW - 4}" height="18" rx="3" fill="${va}" opacity=".9"/><text x="${i * L.CW + L.CW / 2}" y="14" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}">${c.t}${c.t2 && c.t2 !== c.t ? '–' + c.t2 : ''}</text>`;
+  $('xha').innerHTML = `<rect x="2" y="${yy - 8}" width="60" height="16" rx="3" fill="${va}"/><text x="32" y="${yy + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}">${XHP(p)}</text>`;
+  $('xhf').innerHTML = `<rect x="${i * L.CW + 2}" y="1" width="${Math.max(L.CW - 4, String(xhTimeLab(c)).length * 6.4 + 10)}" height="18" rx="3" fill="${va}" opacity=".9"/><text x="${i * L.CW + L.CW / 2}" y="14" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}">${xhTimeLab(c)}</text>`;
+  xhTimeSync(x, i);
 }
-function clearCross() { for (const id of ['xh', 'xha', 'xhf', 'xhp']) { const g = document.getElementById(id); if (g) g.innerHTML = ''; } }
+function clearCross() { for (const id of ['xh', 'xha', 'xhf', 'xhp', 'xhd', 'xhda', 'xhv', 'xhva']) { const g = document.getElementById(id); if (g) g.innerHTML = ''; } }
+$('fp').addEventListener('pointermove', cross);
 $('fp').addEventListener('mousemove', cross);
 // v1.3 celownik na profilach po prawej (sesja kasowa, cała doba, D-1, ostatnie N min…): poziom ceny pod kursorem, linia także na wykresie i oś,
 // a w profilu pod kursorem – wolumen, delta, bid × ask poziomu i położenie względem VA / POC tego profilu
@@ -165,7 +168,8 @@ function crossP(e) {
   if (!L.cols.length || yy < L.HEAD || yy > L.HEAD + L.H) { clearCross(); return; }
   const p = pAt(yy), tw = Number($('prof').getAttribute('width') || 0), seg = LASTP.find(q => x >= q.off && x < q.off + 300);
   $('xh').innerHTML = `<line x1="0" x2="${L.W}" y1="${yy}" y2="${yy}" stroke="${ink}" stroke-width=".8" stroke-dasharray="3 3"/>`;
-  $('xha').innerHTML = `<rect x="2" y="${yy - 8}" width="60" height="16" rx="3" fill="${va}"/><text x="32" y="${yy + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}">${PXF(p)}</text>`;
+  $('xha').innerHTML = `<rect x="2" y="${yy - 8}" width="60" height="16" rx="3" fill="${va}"/><text x="32" y="${yy + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}">${XHP(p)}</text>`;
+  xhClearRows();
   let g = `<line x1="0" x2="${tw}" y1="${yy}" y2="${yy}" stroke="${ink}" stroke-width=".8" stroke-dasharray="3 3"/>`;
   if (seg) { const b = L.bin, k = Q(Math.floor(p / b + 1e-9) * b), z = seg.prof.get(k) || {v: 0, d: 0, bid: 0, ask: 0}, f1 = v => (+v).toFixed(DEC).replace('.', ',');
     const pos = k >= seg.vah ? 'nad VA' : k < seg.val ? 'pod VA' : k === seg.poc ? 'POC' : 'w VA', dP = p - (seg.poc + b / 2);
@@ -179,11 +183,15 @@ function crossP(e) {
       + `<text x="${bx + 8}" y="${by + 56}" font-size="10" fill="${ink}">${l3} · ${l4}</text>`; }
   $('xhp').innerHTML = g;
 }
+$('prof').addEventListener('pointermove', crossP);
 $('prof').addEventListener('mousemove', crossP);
+$('prof').addEventListener('pointerleave', clearCross);
 $('prof').addEventListener('mouseleave', clearCross);
+$('fp').addEventListener('pointermove', () => { const g = document.getElementById('xhp'); if (g) g.innerHTML = ''; });
 $('fp').addEventListener('mousemove', () => { const g = document.getElementById('xhp'); if (g) g.innerHTML = ''; });
-
+$('fp').addEventListener('pointerleave', () => { if (!DRAG) clearCross(); });
 $('fp').addEventListener('mouseleave', () => { if (!DRAG) clearCross(); });
+xhBindMainRows();
 $('fp').addEventListener('mousedown', e => { if (!e.shiftKey || S.tf === 'M1') return; const [x, yy] = xy(e); DRAG = {x, y: yy, i: Math.floor(x / LAST.CW), p: pAt(yy)}; e.preventDefault(); });
 addEventListener('mouseup', e => { if (!DRAG) return; const [x] = xy(e), L = LAST, i = Math.max(0, Math.min(Math.floor(x / L.CW), L.cols.length - 1)), i0 = Math.min(DRAG.i, i), i1 = Math.max(DRAG.i, i); DRAG = null;
   const c0 = L.cols[i0], c1 = L.cols[i1]; if (!c0 || !c1) return; S.sel = {day: S.day, a: c0.parts ? c0.parts[0].idx : (c0.idx ?? c0.last), b: c1.last}; save(); render(true); });
@@ -419,11 +427,11 @@ function applyMode() { const L = window.DAF_LOCK; if (L) S.mode = L; if (!S.mode
 // krawędzi y1, data-v1 przy górnej y0) i etykietę X (data-xl: lista etykiet kolumn 'c' / punktów 'p'; data-xa…xb: oś X jako wartość). Pion przechodzi przez
 // wszystkie wykresy okna z tym samym data-xg (np. OHLC, delta, CVD, wolumen) – jeden moment widać na wszystkich panelach naraz.
 const xhA = o => Object.entries(o).filter(([, v]) => v != null && v === v).map(([k, v]) => ` data-${k}="${String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`).join('') + ' data-xh="1"';
-const xhF = (v, f) => { if (f === 'n') { const a = Math.abs(v), sg = v > 0 ? '+' : v < 0 ? '−' : ''; return sg + (a >= 1e6 ? (a / 1e6).toFixed(2) + ' mln' : a >= 1e4 ? (a / 1e3).toFixed(1) + ' tys.' : Math.round(a)); }
-  if (f === 'v') return String(Math.round(v)); if (f === 'n2') return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + '%'; return (+v).toFixed(DEC); };
+const xhF = (v, f) => { if (f === 'n') { const a = Math.abs(v), sg = v > 0 ? '+' : v < 0 ? '−' : ''; return sg + (a >= 1e6 ? (a / 1e6).toFixed(2).replace('.', ',') + ' mln' : a >= 1e4 ? (a / 1e3).toFixed(1).replace('.', ',') + ' tys.' : Math.round(a)); }
+  if (f === 'v') return String(Math.round(v)); if (f === 'n2') return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + '%'; return (+v).toFixed(DEC).replace('.', ','); };
 let XH_ON = [];
 const xhOff = () => { for (const g of XH_ON) g.remove(); XH_ON = []; };
-document.addEventListener('mousemove', e => {
+const xhWinMove = e => {
   const sv = e.target.closest && e.target.closest('svg[data-xh]'); xhOff(); if (!sv) return;
   const D = sv.dataset, ctm = sv.getScreenCTM(); if (!ctm) return;
   const pt = sv.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const P = pt.matrixTransform(ctm.inverse());
@@ -437,7 +445,7 @@ document.addEventListener('mousemove', e => {
   const NS = 'http://www.w3.org/2000/svg', win = sv.closest('.vawin') || document, grp = D.xg ? [...win.querySelectorAll(`svg[data-xh][data-xg="${D.xg}"]`)] : [sv];
   const mk = (par, html) => { const g = document.createElementNS(NS, 'g'); g.setAttribute('pointer-events', 'none'); g.innerHTML = html; par.appendChild(g); XH_ON.push(g); };
   const lw = sv.viewBox.baseVal.width || x1;
-  for (const s2 of grp) { const d2 = s2.dataset; mk(s2, `<line x1="${X}" x2="${X}" y1="${+d2.y0 - 4}" y2="${+d2.y1 + 2}" stroke="var(--ewr)" stroke-width="1"/>`); }
+  for (const s2 of grp) { const d2 = s2.dataset; mk(s2, `<line x1="${X}" x2="${X}" y1="${+d2.y0 - 4}" y2="${+d2.y1 + 2}" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`); }
   let h = `<line x1="${x0}" x2="${x1}" y1="${Y}" y2="${Y}" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2" opacity=".8"/>`;
   if (D.v0 != null && D.v1 != null) { const v = +D.v0 + (y1 - Y) / ((y1 - y0) || 1) * (+D.v1 - +D.v0), t = xhF(v, D.f || 'p'), w = t.length * 6.6 + 10, side = D.ys === 'l' ? 'l' : 'r';
     const bx = side === 'l' ? Math.max(0, x0 - w - 2) : Math.min(lw - w, x1 + 2);
@@ -445,7 +453,132 @@ document.addEventListener('mousemove', e => {
   mk(sv, h);
   if (lab != null) { const tg = grp[grp.length - 1], d2 = tg.dataset, w = String(lab).length * 6.4 + 10, bx = Math.max(+d2.x0 - 20, Math.min((tg.viewBox.baseVal.width || +d2.x1) - w, X - w / 2)), yb = +d2.y1 + 2;
     mk(tg, `<rect x="${bx}" y="${yb}" width="${w}" height="15" rx="3" fill="var(--ewr)"/><text x="${bx + w / 2}" y="${yb + 11}" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="var(--mono, monospace)">${lab}</text>`); }
-});
+};
+document.addEventListener('pointermove', xhWinMove);
+document.addEventListener('mousemove', xhWinMove);
+document.addEventListener('pointerup', e => { if (e.pointerType && e.pointerType !== 'mouse') xhOff(); });
+document.addEventListener('pointercancel', xhOff);
+
+// v1.13 celownik: etykieta czasu (HH:MM, data gdy zakres obejmuje więcej niż jedną dobę) i synchronizacja pionu na panelach delty / VIX
+function xhTimeLab(c) {
+  if (!c) return '';
+  const t = c.t + (c.t2 && c.t2 !== c.t ? '–' + c.t2 : '');
+  return t;
+}
+function xhG(id, html) { const g = document.getElementById(id); if (g) g.innerHTML = html || ''; }
+function xhClearRows() { xhG('xhd'); xhG('xhda'); xhG('xhv'); xhG('xhva'); }
+function xhVline(x, y0, y1, ink) {
+  return `<line x1="${x}" x2="${x}" y1="${y0}" y2="${y1}" stroke="${ink}" stroke-width=".8" stroke-dasharray="3 3"/>`;
+}
+function xhTimeSync(x, i) {
+  const L = LAST, ink = css('--ink');
+  if (!L || !L.cols || !L.cols.length) return;
+  if (L.dp && L.dp.on) xhG('xhd', xhVline(x, 0, L.dp.DH, ink));
+  else xhG('xhd');
+  xhG('xhda');
+  if (L.vx && L.vx.on) xhG('xhv', xhVline(x, 0, L.vx.VH, ink));
+  else xhG('xhv');
+  xhG('xhva');
+}
+function xhTag(x, y, t, fill, pan, anchor) {
+  const w = Math.max(36, String(t).length * 6.6 + 10), bx = anchor === 'l' ? x : x - w / 2;
+  return `<rect x="${bx}" y="${y - 8}" width="${w}" height="16" rx="3" fill="${fill}"/><text x="${bx + w / 2}" y="${y + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}">${t}</text>`;
+}
+function xhDpVal(Y) {
+  const D = LAST && LAST.dp; if (!D) return null;
+  const {H1_, HV_, H2_, G, mx, a0, a1, vmx, yv0, DH} = D;
+  if (Y <= 6 + H1_ + G / 2) {
+    const v = (6 + H1_ / 2 - Y) / Math.max(H1_ / 2 - 2, 1) * mx;
+    return {lab: 'Δ ' + fmt(v, 1), y: Math.max(6, Math.min(6 + H1_, Y))};
+  }
+  if (Y <= yv0 + G / 2) {
+    const v = Math.max(0, (yv0 - Y) / Math.max(HV_ - 4, 1) * vmx);
+    return {lab: 'wol ' + fmt(v), y: Math.max(6 + H1_ + G, Math.min(yv0, Y))};
+  }
+  if (a0 == null || a1 == null) return null;
+  const top = 6 + H1_ + G + HV_ + G;
+  const v = a1 - (Y - top - 2) / Math.max(H2_ - 4, 1) * Math.max(a1 - a0, 1);
+  return {lab: 'acc Δ ' + fmt(v, 1), y: Math.max(top, Math.min(DH - 2, Y))};
+}
+function xhVxVal(Y) {
+  const V = LAST && LAST.vx; if (!V || !V.on || V.ok < 2) return null;
+  const rg = V.hi - V.lo || 1, inv = V.inv;
+  const v = inv ? V.lo + (Y - 8) / Math.max(V.VH - 20, 1) * rg : V.lo + (V.VH - 12 - Y) / Math.max(V.VH - 20, 1) * rg;
+  return {lab: 'VIX ' + v.toFixed(2).replace('.', ','), y: Math.max(8, Math.min(V.VH - 12, Y))};
+}
+function crossRow(e, kind) {
+  const id = kind === 'dp' ? 'dlt' : 'vln', el = $(id); if (!el) return;
+  const r = el.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top;
+  const L = LAST, ink = css('--ink'), pan = css('--panel'), va = css('--vwap');
+  const row = kind === 'dp' ? L.dp : L.vx;
+  if (!row || !row.on || !L.cols || !L.cols.length) { clearCross(); return; }
+  const Hgt = kind === 'dp' ? row.DH : row.VH;
+  if (yy < 0 || yy > Hgt || x < 0 || x > (L.W || r.width)) { clearCross(); return; }
+  const i = Math.max(0, Math.min(Math.floor(x / L.CW), L.cols.length - 1)), c = L.cols[i]; if (!c) { clearCross(); return; }
+  const val = kind === 'dp' ? xhDpVal(yy) : xhVxVal(yy);
+  $('xh').innerHTML = `<rect x="${i * L.CW}" y="${L.HEAD}" width="${L.CW}" height="${L.H}" fill="${ink}" opacity=".05"/>` + xhVline(x, L.HEAD, L.HEAD + L.H, ink);
+  $('xha').innerHTML = '';
+  const tw = Math.max(L.CW - 4, String(xhTimeLab(c)).length * 6.4 + 10);
+  $('xhf').innerHTML = `<rect x="${i * L.CW + 2}" y="1" width="${tw}" height="18" rx="3" fill="${va}" opacity=".9"/><text x="${i * L.CW + L.CW / 2}" y="14" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}">${xhTimeLab(c)}</text>`;
+  $('xhp').innerHTML = '';
+  if (kind === 'dp') {
+    let h = xhVline(x, 0, row.DH, ink);
+    if (val) h += `<line x1="0" x2="${L.W}" y1="${val.y}" y2="${val.y}" stroke="${ink}" stroke-width=".8" stroke-dasharray="3 3"/>`;
+    xhG('xhd', h);
+    xhG('xhda', val ? xhTag(2, val.y, val.lab, va, pan, 'l') : '');
+    if (L.vx && L.vx.on) xhG('xhv', xhVline(x, 0, L.vx.VH, ink)); else xhG('xhv');
+    xhG('xhva');
+  } else {
+    let h = xhVline(x, 0, row.VH, ink);
+    if (val) h += `<line x1="0" x2="${L.W}" y1="${val.y}" y2="${val.y}" stroke="${ink}" stroke-width=".8" stroke-dasharray="3 3"/>`;
+    xhG('xhv', h);
+    xhG('xhva', val ? xhTag(2, val.y, val.lab, va, pan, 'l') : '');
+    if (L.dp && L.dp.on) xhG('xhd', xhVline(x, 0, L.dp.DH, ink)); else xhG('xhd');
+    xhG('xhda');
+  }
+}
+function xhBindMainRows() {
+  if (xhBindMainRows.ok) return; xhBindMainRows.ok = 1;
+  const bind = (id, kind) => {
+    const el = $(id); if (!el) return;
+    const go = e => crossRow(e, kind), off = () => { if (!DRAG) clearCross(); };
+    el.addEventListener('pointermove', go); el.addEventListener('mousemove', go);
+    el.addEventListener('pointerleave', off); el.addEventListener('mouseleave', off);
+  };
+  bind('dlt', 'dp'); bind('vln', 'vx');
+}
+function xhMountMain() {
+  const add = (id, gid) => { const el = $(id); if (!el) return; if (!document.getElementById(gid)) el.insertAdjacentHTML('beforeend', `<g id="${gid}" pointer-events="none"></g>`); else { /* re-insert after innerHTML wipe */ if (!el.querySelector('#' + gid)) el.insertAdjacentHTML('beforeend', `<g id="${gid}" pointer-events="none"></g>`); } };
+  add('fp', 'xh'); add('axis', 'xha'); add('ftr', 'xhf'); add('prof', 'xhp');
+  add('dlt', 'xhd'); add('dax', 'xhda'); add('vln', 'xhv'); add('vax', 'xhva');
+}
+
+// overlay canvas helpers (HVN, CTA) – rysunek na osobnej warstwie, bez przemalowywania wykresu
+function xhOvEnsure(box, id, w, h, dpr) {
+  if (!box) return null;
+  let c = document.getElementById(id);
+  if (!c) { c = document.createElement('canvas'); c.id = id; c.className = 'xh-ov'; box.appendChild(c); }
+  c.style.width = w + 'px'; c.style.height = h + 'px';
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return {c, ctx, w, h};
+}
+function xhOvDash(ctx, x1, y1, x2, y2, col) {
+  ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+function xhOvTag(ctx, x, y, text, align, bg) {
+  ctx.save(); ctx.font = '700 10.5px ui-monospace,monospace';
+  const tw = ctx.measureText(text).width + 10, bh = 16, r = 3;
+  let bx = align === 'r' ? x - tw : align === 'c' ? x - tw / 2 : x;
+  const by = y - 8;
+  ctx.fillStyle = bg || '#6741d9';
+  ctx.beginPath(); ctx.moveTo(bx + r, by); ctx.arcTo(bx + tw, by, bx + tw, by + bh, r); ctx.arcTo(bx + tw, by + bh, bx, by + bh, r); ctx.arcTo(bx, by + bh, bx, by, r); ctx.arcTo(bx, by, bx + tw, by, r); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + tw / 2, y);
+  ctx.restore();
+}
+
 // v1.9 sesje rynków: noc = od zamknięcia poprzedniej sesji kasowej do otwarcia bieżącej, także przez granicę doby DA (23:00).
 // US500 22:00 D-1 → 15:30, DAX 17:30 D-1 → 09:00, J225 07:30 D-1 → 01:00 (wcześniej noc = tylko świece doby DA przed sesją, dla J225 2 godziny).
 // Godziny sesji kasowej z pola rth w danych (plan sesji: docs/sesje_rynkow.md). Zwraca {boxes, cells, from, n0} – świece D-1 po sesji + świece doby przed sesją.
@@ -1430,7 +1563,8 @@ function render(keep) {
       tb += `<text x="8" y="${36 + 4 * 22}" font-size="9" fill="${C.mut}">do świecy ${cols[cols.length - 1].t}${M1 ? ' · M1: z footprintu M5' : ''} · ×N = wolumen / średnia 5 sesji</text>`;
       tb += `<text x="8" y="${DH - 30}" font-size="10" fill="${C.mut}">Δ w widoku: <tspan fill="${cols.reduce((a, c) => a + c.d, 0) >= 0 ? C.buy : C.sell}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.d, 0), 1)}</tspan> · wol: <tspan fill="${C.ink}" font-weight="600">${fmt(cols.reduce((a, c) => a + c.v, 0))}</tspan></text><text x="8" y="${DH - 12}" font-size="10" fill="${C.mut}">acc Δ na końcu: <tspan fill="${(accs[accs.length - 1] ?? 0) >= 0 ? C.buy : C.sell}" font-weight="600">${accs.length ? fmt(accs[accs.length - 1], 1) : '–'}</tspan></text>`;
       dp.innerHTML = tb;
-    } }
+      LAST.dp = {on: true, DH, H1_, HV_, H2_, G, mx, a0: accs.length ? a0 : null, a1: accs.length ? a1 : null, vmx, yv0, W, CW};
+    } else LAST.dp = {on: false}; }
   { const want = S.vx !== false, row = $('vxrow'), has = cols.some(c => c.ve != null || c.vs != null);
     const on = want && INST !== 'VIX';
     row.hidden = !on; $('wrap').classList.toggle('vx-on', on);
@@ -1476,7 +1610,11 @@ function render(keep) {
       tb += `<text x="10" y="76" font-size="12" font-weight="700" fill="${colr(r60)}">60 min  r = ${fr(r60)}</text><text x="10" y="90" font-size="9.5" fill="${C.mut}">ostatnie ${last60.length} zwrotów (rolling)</text>`;
       tb += `<text x="10" y="${VH - 10}" font-size="9" fill="${C.mut}">${inv ? 'oś VIX odwrócona · ' : ''}typowa relacja: r < 0 · opis, nie sygnał</text>`;
       vp.innerHTML = tb;
-    } }
+      if (ok.length >= 2) {
+        const lo0 = Math.min(...ok.map(p => p.v)), hi0 = Math.max(...ok.map(p => p.v)), pd = Math.max((hi0 - lo0) * .08, 0.05);
+        LAST.vx = {on: true, VH, lo: lo0 - pd, hi: hi0 + pd, inv, W, CW, ok: ok.length};
+      } else LAST.vx = {on: true, VH, ok: ok.length, W, CW, inv};
+    } else LAST.vx = {on: false}; }
   const ft = $('ftr'); ft.setAttribute('width', W); ft.setAttribute('height', FH); ft.innerHTML = of.join('');
   const bc = $('bcorner'); bc.setAttribute('width', AW); bc.setAttribute('height', FH);
   bc.innerHTML = `<text x="${AW - 6}" y="15" text-anchor="end" font-size="9.5" fill="${C.mut}">czas PL</text><text x="${AW - 6}" y="35" text-anchor="end" font-size="9.5" fill="${C.vix}">VIX (Δ)</text><text x="${AW - 6}" y="50" text-anchor="end" font-size="9.5" fill="${C.mut}">potw. VIX</text>`;
@@ -2045,7 +2183,7 @@ function render(keep) {
   const axs = $('axis'); axs.setAttribute('width', AW); axs.setAttribute('height', HEAD + H + FOOT); axs.innerHTML = ax.join('');
   if (keep !== true) { const w = $('wrap'); const ys = cols.slice(0, 12).map(c => y(c.C)); w.scrollTop = Math.max(0, (Math.min(...ys) + Math.max(...ys)) / 2 - (w.clientHeight - HH) / 2); w.scrollLeft = 0; }
   { const g = document.getElementById('lvlab'); if (g) g.setAttribute('transform', `translate(${$('wrap').scrollLeft},0)`); }
-  $('fp').insertAdjacentHTML('beforeend', '<g id="xh" pointer-events="none"></g>'); $('axis').insertAdjacentHTML('beforeend', '<g id="xha" pointer-events="none"></g>'); $('ftr').insertAdjacentHTML('beforeend', '<g id="xhf" pointer-events="none"></g>');
+  xhMountMain();
   if (typeof tick === 'function') tick();
   const tot = cols.reduce((a, c) => a + c.d, 0), vol = cols.reduce((a, c) => a + c.v, 0), last = cols[cols.length - 1];
   $('sum').innerHTML = (S.bin === 'auto' ? `<span>Krok auto: <b>${bin} pkt</b></span>` : '') + `<span>Ostatnia cena: <b>${PXF(LP)}</b> (${LT}${last.ap ? '*' : ''})</span><span>Świec: <b>${cols.length}</b></span><span>Zakres: <b>${PXF(Math.min(...cols.map(c => c.L)))}–${PXF(Math.max(...cols.map(c => c.H)))}</b></span>${M1 ? '<span>M1: świece i acc Δ z eksportu DA (bez bid × ask)</span>' : `<span>Wolumen: <b>${fmt(vol)}</b></span><span>Delta: <b style="color:${tot >= 0 ? C.buy : C.sell}">${fmt(tot, 1)}</b></span>`}` +
@@ -2457,23 +2595,52 @@ function paintHvnWin(){
   pctx.textAlign = 'center'; pctx.textBaseline = 'top';
   pctx.fillText('niezmitygowane', pw / 2, py1 + 4);
 
-  // tooltip
+  // tooltip + celownik (osobna warstwa canvas, bez przemalowywania heatmapy)
   const tip = $('hvTip');
-  cH.onmousemove = ev => {
-    const r = cH.getBoundingClientRect();
-    const x = ev.clientX - r.left, y = ev.clientY - r.top;
-    if (x < x0 || x > x1 || y < y0 || y > y1) { tip.style.display = 'none'; return; }
-    const j = Math.max(0, Math.min(n - 1, Math.floor((x - x0) / (x1 - x0) * n)));
-    const price = Math.round(pmin + (y1 - y) / (y1 - y0) * pr);
-    const pairs = cols[j] || [];
-    let vol = 0; for (const q of pairs) if (q[0] === price) vol = q[1];
-    const near = (D.open || []).filter(lv => Math.abs(lv.cena - price) <= 1).map(lv => `${lv.typ} ${lv.cena}`).join(', ');
-    tip.style.display = 'block';
-    tip.style.left = Math.min(x + 12, r.width - 160) + 'px';
-    tip.style.top = Math.max(0, y - 28) + 'px';
-    tip.textContent = `${hours[j].lab || ''}  ·  ${price}  ·  vol ${vol}${near ? '  ·  ' + near : ''}`;
+  const colX = '#9775fa';
+  const pLab = p => Number(p).toLocaleString('pl-PL', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+  const vLab = v => Number(v).toLocaleString('pl-PL', {maximumFractionDigits: 1});
+  const profAt = price => { let vol = 0; for (const q of (D.profile || [])) if (q[0] === price) vol = q[1]; return vol; };
+  const paintHvnXh = (src, x, y) => {
+    const Ho = xhOvEnsure(heatBox, 'hvHeatX', Hm.w, Hm.h, dpr);
+    const Po = xhOvEnsure(profBox, 'hvProfX', Pm.w, Pm.h, dpr);
+    if (!Ho || !Po) return;
+    const inH = src === 'h' && x >= x0 && x <= x1 && y >= y0 && y <= y1;
+    const inP = src === 'p' && x >= px0 && x <= px1 && y >= py0 && y <= py1;
+    if (!inH && !inP) { tip.style.display = 'none'; return; }
+    const yy = inH ? y : y; // same pixel space (same T/B)
+    const price = Math.round(pmin + (y1 - yy) / (y1 - y0) * pr);
+    const yP = yOf(price);
+    const yPr = pyOf(price);
+    xhOvDash(Ho.ctx, x0, yP, x1, yP, colX);
+    xhOvDash(Po.ctx, px0, yPr, px1, yPr, colX);
+    xhOvTag(Ho.ctx, x0 - 2, yP, pLab(price), 'r', colX);
+    const pvol = profAt(price);
+    xhOvTag(Po.ctx, px0 + 2, yPr, pLab(price) + (pvol ? ' · wol ' + vLab(pvol) : ''), 'l', colX);
+    if (inH) {
+      const j = Math.max(0, Math.min(n - 1, Math.floor((x - x0) / (x1 - x0) * n)));
+      const xv = xOf(j);
+      xhOvDash(Ho.ctx, xv, y0, xv, y1, colX);
+      const lab = hours[j].lab || '';
+      xhOvTag(Ho.ctx, Math.max(x0, Math.min(x1, xv)), y1 + 10, lab, 'c', colX);
+      const pairs = cols[j] || [];
+      let vol = 0; for (const q of pairs) if (q[0] === price) vol = q[1];
+      const near = (D.open || []).filter(lv => Math.abs(lv.cena - price) <= 1).map(lv => `${lv.typ} ${lv.cena}`).join(', ');
+      tip.style.display = 'block';
+      tip.style.left = Math.min(x + 12, Hm.w - 160) + 'px';
+      tip.style.top = Math.max(0, y - 28) + 'px';
+      tip.textContent = `${lab}  ·  ${pLab(price)}  ·  wol ${vLab(vol)}${near ? '  ·  ' + near : ''}`;
+    } else tip.style.display = 'none';
   };
-  cH.onmouseleave = () => { tip.style.display = 'none'; };
+  const leaveHvnXh = () => {
+    tip.style.display = 'none';
+    xhOvEnsure(heatBox, 'hvHeatX', Hm.w, Hm.h, dpr);
+    xhOvEnsure(profBox, 'hvProfX', Pm.w, Pm.h, dpr);
+  };
+  const onH = ev => { const r = cH.getBoundingClientRect(); paintHvnXh('h', ev.clientX - r.left, ev.clientY - r.top); };
+  const onP = ev => { const r = cP.getBoundingClientRect(); paintHvnXh('p', ev.clientX - r.left, ev.clientY - r.top); };
+  cH.onmousemove = onH; cH.onpointermove = onH; cH.onmouseleave = leaveHvnXh; cH.onpointerleave = leaveHvnXh;
+  cP.onmousemove = onP; cP.onpointermove = onP; cP.onmouseleave = leaveHvnXh; cP.onpointerleave = leaveHvnXh;
 }
 addEventListener('resize', () => { if (S.hvw && HVN && !HVN.err) paintHvnWin(); if (S.ctw && CTA && !CTA.err) paintCtaWin(); });
 
@@ -2643,6 +2810,8 @@ function paintCtaWin(){
     ctx.fillText((a.d || '').slice(0, 10), padL, H - 16);
     ctx.textAlign = 'right';
     ctx.fillText((b.d || '').slice(0, 10), W - padR, H - 16);
+    window.CTAXH = window.CTAXH || {};
+    window.CTAXH.trend = {id: 'ctTrendC', W, H, padL, padR, padT, padB, ymin, ymax, series, n: series.length, typ: 'trend'};
   }
   // vol
   const vFit = ctaFit($('ctVolC'), 200);
@@ -2666,6 +2835,8 @@ function paintCtaWin(){
     ctx.fillText((series[0].d || '').slice(0, 10), padL, H - 16);
     ctx.textAlign = 'right';
     ctx.fillText((series[series.length - 1].d || '').slice(0, 10), W - padR, H - 16);
+    window.CTAXH = window.CTAXH || {};
+    window.CTAXH.vol = {id: 'ctVolC', W, H, padL, padR, padT, padB, ymin, ymax, series, n: series.length, typ: 'vol'};
   }
   // flow
   const fFit = ctaFit($('ctFlowC'), 200);
@@ -2708,9 +2879,84 @@ function paintCtaWin(){
     days.forEach((d, i) => {
       if (i === 0 || i === n - 1 || n <= 8 || i % 2 === 0) ctx.fillText((d.d_pl || d.d || '').slice(0, 5), xOf(W, i, n), H - 16);
     });
-  }
+    window.CTAXH = window.CTAXH || {};
+    window.CTAXH.flow = {id: 'ctFlowC', W, H, padL, padR, padT, padB, n, days, yminB, ymaxB, cmin: cmin - cm, cmax: cmax + cm, typ: 'flow'};
+  } else if (window.CTAXH) delete window.CTAXH.flow;
+  xhBindCta();
 }
 
+function xhCtaDate(iso) {
+  if (!iso) return '';
+  const s = String(iso);
+  if (s.length >= 10 && s[4] === '-') return s.slice(8, 10) + '.' + s.slice(5, 7);
+  return s.slice(0, 8);
+}
+function xhBindCta() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1), col = css('--ewr') || '#9775fa';
+  const charts = [];
+  const tFit = {c: $('ctTrendC')}, vFit = {c: $('ctVolC')}, fFit = {c: $('ctFlowC')};
+  const X = window.CTAXH || {};
+  const paintOne = (meta, mx, my, peers) => {
+    if (!meta) return;
+    const c = $(meta.id); if (!c) return;
+    const box = c.parentElement, W = meta.W, H = meta.H;
+    const ov = xhOvEnsure(box, meta.id + 'X', W, H, dpr); if (!ov) return;
+    const {padL, padR, padT, padB} = meta;
+    if (mx < padL || mx > W - padR || my < padT || my > H - padB) return;
+    const n = meta.n || (meta.series && meta.series.length) || 0; if (!n) return;
+    const i = n <= 1 ? 0 : Math.round((mx - padL) / (W - padL - padR) * (n - 1));
+    const ii = Math.max(0, Math.min(n - 1, i));
+    const x = padL + (W - padL - padR) * (n <= 1 ? 0.5 : ii / (n - 1));
+    xhOvDash(ov.ctx, x, padT, x, H - padB, col);
+    xhOvDash(ov.ctx, padL, my, W - padR, my, col);
+    let yLab, tLab;
+    if (meta.typ === 'flow') {
+      const d = meta.days[ii] || {};
+      const yminB = meta.yminB, ymaxB = meta.ymaxB;
+      const v = yminB + (1 - (my - padT) / (H - padT - padB)) * (ymaxB - yminB);
+      yLab = 'Δ ' + (v >= 0 ? '+' : '−') + Math.abs(v).toLocaleString('pl-PL', {maximumFractionDigits: 0});
+      tLab = d.d_pl || xhCtaDate(d.d);
+    } else {
+      const ymin = meta.ymin, ymax = meta.ymax;
+      const v = ymin + (1 - (my - padT) / (H - padT - padB)) * (ymax - ymin);
+      const dec = Math.abs(v) >= 100 ? 0 : 2;
+      yLab = v.toLocaleString('pl-PL', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+      const row = meta.series[ii] || {};
+      tLab = xhCtaDate(row.d);
+    }
+    xhOvTag(ov.ctx, padL - 2, my, yLab, 'r', col);
+    xhOvTag(ov.ctx, Math.max(padL, Math.min(W - padR, x)), H - padB + 10, tLab, 'c', col);
+    return {ii, typ: meta.typ};
+  };
+  const paintAll = (srcId, mx, my) => {
+    const ids = ['ctTrendC', 'ctVolC', 'ctFlowC'];
+    ids.forEach(id => { const m = id === 'ctTrendC' ? X.trend : id === 'ctVolC' ? X.vol : X.flow; if (!m) return; const c = $(id); if (!c) return; xhOvEnsure(c.parentElement, id + 'X', m.W, m.H, dpr); });
+    const src = srcId === 'ctTrendC' ? X.trend : srcId === 'ctVolC' ? X.vol : X.flow;
+    const hit = paintOne(src, mx, my);
+    if (!hit) return;
+    // pion (ta sama sesja) na wykresach trendu i vol, które dzielą szereg
+    if (srcId === 'ctTrendC' || srcId === 'ctVolC') {
+      const other = srcId === 'ctTrendC' ? X.vol : X.trend;
+      if (other && other.series && src.series && other.series.length === src.series.length) {
+        const c = $(other.id); if (!c) return;
+        const ov = xhOvEnsure(c.parentElement, other.id + 'X', other.W, other.H, dpr);
+        const n = other.series.length, x = other.padL + (other.W - other.padL - other.padR) * (n <= 1 ? 0.5 : hit.ii / (n - 1));
+        xhOvDash(ov.ctx, x, other.padT, x, other.H - other.padB, col);
+        xhOvTag(ov.ctx, Math.max(other.padL, Math.min(other.W - other.padR, x)), other.H - other.padB + 10, xhCtaDate(other.series[hit.ii] && other.series[hit.ii].d), 'c', col);
+      }
+    }
+  };
+  const bind = (id, meta) => {
+    const c = $(id); if (!c || !meta || c.dataset.xhBound) return;
+    c.dataset.xhBound = '1';
+    const go = ev => { const r = c.getBoundingClientRect(); paintAll(id, ev.clientX - r.left, ev.clientY - r.top); };
+    const off = () => { ['ctTrendC', 'ctVolC', 'ctFlowC'].forEach(k => { const m = k === 'ctTrendC' ? (window.CTAXH || {}).trend : k === 'ctVolC' ? (window.CTAXH || {}).vol : (window.CTAXH || {}).flow; const el = $(k); if (m && el) xhOvEnsure(el.parentElement, k + 'X', m.W, m.H, dpr); }); };
+    c.addEventListener('pointermove', go); c.addEventListener('mousemove', go);
+    c.addEventListener('pointerleave', off); c.addEventListener('mouseleave', off);
+  };
+  // store trend/vol metas written below during paint; bind every paint (dataset guard)
+  bind('ctTrendC', X.trend); bind('ctVolC', X.vol); bind('ctFlowC', X.flow);
+}
 
 // v1.12 okno dwóch paneli profilu niezmitygowanego (US500)
 function drawP2Win(lastIdx){
@@ -2935,7 +3181,36 @@ function drawP2Win(lastIdx){
     + (src ? ' ' + src + '.' : '');
 
   $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
-  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh)" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}</svg><p class="note">${caveat}</p>`;
+  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh);cursor:crosshair" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}<g id="p2xh" pointer-events="none"></g></svg><p class="note">${caveat}</p>`;
   window._P2_DAF = { t0, t1, lhLo, lhHi, st, sumE, sumEmit, sumEunm, sumH, sumG, sumT, nMit, nUnm, price, poc, day, lastI, lo, hi };
+  window.P2XH = { W, Hgt, xL0, xR0, paneW, y0, ph, lo, hi, st, G, T, E, Hmap: H, fmtP, fmtN, pr, axisW, lhLo, lhHi };
+  xhInitP2();
+}
+function xhInitP2() {
+  const box = $('p2WinB'); if (!box || box.dataset.xhBound) return; box.dataset.xhBound = '1';
+  const off = () => { const g = $('p2xh'); if (g) g.innerHTML = ''; };
+  const move = e => {
+    const X = window.P2XH, sv = e.target.closest && e.target.closest('#p2svg'); if (!X || !sv) { off(); return; }
+    const ctm = sv.getScreenCTM(); if (!ctm) return;
+    const pt = sv.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const P = pt.matrixTransform(ctm.inverse());
+    const {xL0, xR0, paneW, y0, ph, lo, hi, st, W, pr, axisW} = X;
+    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW && P.x <= W - pr;
+    if (P.y < y0 - 2 || P.y > y0 + ph + 2 || !(inL || inR || inAx)) { off(); return; }
+    const p = hi - (P.y - y0) / ph * (hi - lo), Y = Math.max(y0, Math.min(y0 + ph, P.y));
+    const k = Math.floor(p / st + 1e-9) * st, gv = X.G[k] || 0, tv = X.T[k] || 0, ev = X.E[k] || 0, hv = X.Hmap[k] || 0;
+    const mit = X.lhLo != null && X.lhHi != null && k <= X.lhHi && k + st > X.lhLo;
+    const lab = X.fmtP(p), ink = 'var(--ewr)', pan = '#fff';
+    let vol = `lewy poprz. ${X.fmtN(gv, 0)} + dziś ${X.fmtN(tv, 0)}`;
+    if (hv) vol += ` · 1 h ${X.fmtN(hv, 0)}`;
+    vol += ` · prawy ${X.fmtN(ev, 0)}${mit ? ' (zmityg.)' : ' (niezmityg.)'}`;
+    const wl = Math.max(axisW - 4, lab.length * 6.6 + 10), bx = W - pr - axisW + (axisW - wl) / 2;
+    const vw = Math.min(420, vol.length * 6.2 + 12), vx = Math.max(xL0, Math.min(xR0 + paneW - vw, (inR ? xR0 : xL0) + 8)), vy = Y + 20 > y0 + ph - 4 ? Y - 22 : Y + 10;
+    $('p2xh').innerHTML = `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
+      + `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
+      + `<rect x="${bx}" y="${Y - 8}" width="${wl}" height="16" rx="3" fill="${ink}"/><text x="${bx + wl / 2}" y="${Y + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${lab}</text>`
+      + `<rect x="${vx}" y="${vy}" width="${vw}" height="16" rx="3" fill="${ink}"/><text x="${vx + vw / 2}" y="${vy + 12}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${vol}</text>`;
+  };
+  box.addEventListener('pointermove', move); box.addEventListener('mousemove', move);
+  box.addEventListener('pointerleave', off); box.addEventListener('mouseleave', off);
 }
 
