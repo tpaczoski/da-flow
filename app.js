@@ -59,6 +59,8 @@ if (S.sig === undefined) S.sig = true;
 optLoad();
 var HVN = null, HVN_ST = 0;
 var CTA = null, CTA_ST = 0;
+var P2Z = { scaleView: true, day: null, inst: null, zLo: null, zHi: null, drag: null, ptrs: null };
+var P2DATA = null, P2Z_raf = 0;
 if (!S.pf || typeof S.pf !== 'object') S.pf = {pre: false, rth: false, day: true};
 if (!S.cell || typeof S.cell !== 'object') S.cell = {ba: true, v: true, d: true};
 for (const k of ['ba', 'v', 'd']) $('cell_' + k).onchange = e => { S.cell[k] = e.target.checked; save(); render(true); };
@@ -2959,15 +2961,80 @@ function xhBindCta() {
 }
 
 // v1.12 okno dwóch paneli profilu niezmitygowanego (US500)
+// v1.14 zoom wspólnej osi ceny w oknie dwóch paneli profilu niezmitygowanego
+// P2Z / P2DATA zainicjowane na górze pliku, żeby przetrwać pierwsze render() i odświeżenie 5 min
+
+function p2IsZoomed() { return P2Z.zLo != null && P2Z.zHi != null && P2Z.zHi > P2Z.zLo; }
+function p2FullSpan() { return P2DATA ? P2DATA.fullHi - P2DATA.fullLo : 0; }
+function p2MinSpan() { return P2DATA ? Math.max(P2DATA.st * 8, 8) : 8; }
+function p2Vis() {
+  const D = P2DATA; if (!D) return {lo: 0, hi: 1};
+  let lo = D.fullLo, hi = D.fullHi;
+  if (p2IsZoomed()) { lo = P2Z.zLo; hi = P2Z.zHi; }
+  const min = p2MinSpan();
+  if (hi - lo < min) { const m = (lo + hi) / 2; lo = m - min / 2; hi = m + min / 2; }
+  return {lo, hi};
+}
+function p2SetView(lo, hi, snapFull) {
+  if (!P2DATA) return;
+  const fLo = P2DATA.fullLo, fHi = P2DATA.fullHi, min = p2MinSpan();
+  let nLo = lo, nHi = hi;
+  if (!(nHi > nLo)) return;
+  if (nHi - nLo < min) { const m = (nLo + nHi) / 2; nLo = m - min / 2; nHi = m + min / 2; }
+  if (nLo < fLo) { nHi += fLo - nLo; nLo = fLo; }
+  if (nHi > fHi) { nLo -= nHi - fHi; nHi = fHi; }
+  nLo = Math.max(fLo, nLo); nHi = Math.min(fHi, nHi);
+  if (nHi - nLo < min) return;
+  if (snapFull !== false && nHi - nLo >= (fHi - fLo) * 0.98) { P2Z.zLo = P2Z.zHi = null; }
+  else { P2Z.zLo = nLo; P2Z.zHi = nHi; }
+}
+function p2ZoomAt(price, factor) {
+  if (!P2DATA) return;
+  const v = p2Vis(), span = Math.max(p2MinSpan(), Math.min(p2FullSpan(), (v.hi - v.lo) * factor));
+  const t = (v.hi === v.lo) ? 0.5 : (price - v.lo) / (v.hi - v.lo);
+  const tt = Math.max(0, Math.min(1, t));
+  p2SetView(price - tt * span, price - tt * span + span);
+  paintP2Win();
+}
+function p2ZoomCenter(factor) {
+  if (!P2DATA) return;
+  const v = p2Vis(), mid = (v.lo + v.hi) / 2;
+  const px = P2DATA.price != null && P2DATA.price >= v.lo && P2DATA.price <= v.hi ? P2DATA.price : mid;
+  p2ZoomAt(px, factor);
+}
+function p2ResetZoom() { P2Z.zLo = P2Z.zHi = null; paintP2Win(); }
+function p2Pan(dp) {
+  if (!P2DATA || !p2IsZoomed()) return;
+  const v = p2Vis();
+  p2SetView(v.lo + dp, v.hi + dp, false);
+  paintP2WinSoon();
+}
+function paintP2WinSoon() {
+  if (P2Z_raf) return;
+  P2Z_raf = requestAnimationFrame(() => { P2Z_raf = 0; paintP2Win(); });
+}
+function p2SvgPoint(sv, e) {
+  if (!sv || !sv.getScreenCTM) return null;
+  const ctm = sv.getScreenCTM(); if (!ctm) return null;
+  const pt = sv.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+function p2PriceFromY(Y) {
+  const X = window.P2XH; if (!X || !X.ph) return null;
+  return X.hi - (Y - X.y0) / X.ph * (X.hi - X.lo);
+}
+
 function drawP2Win(lastIdx){
   const box = $('p2Win'); if (!box) return;
   box.hidden = !S.p2w;
   if ($('showP2W')) $('showP2W').checked = !!S.p2w;
+  if ($('p2Zoom')) $('p2Zoom').hidden = !S.p2w;
   if (!S.p2w) return;
   const pack = (CACHE && CACHE.US500) || (INST === 'US500' ? DATA : null);
   if (!pack || typeof pack !== 'object') {
     $('p2WinPx').textContent = 'brak danych US500';
     $('p2WinB').innerHTML = '<p class="note">Brak CACHE.US500 – okno jest dostępne tylko dla US500.</p>';
+    P2DATA = null;
     return;
   }
   const days = Object.keys(pack).sort();
@@ -2976,13 +3043,14 @@ function drawP2Win(lastIdx){
   if (!cur || !cur.boxes || !cur.boxes.length) {
     $('p2WinPx').textContent = 'brak sesji';
     $('p2WinB').innerHTML = '<p class="note">Brak świec US500 dla wybranej sesji.</p>';
+    P2DATA = null;
     return;
   }
   const cap = (Number.isFinite(lastIdx) ? lastIdx : Infinity);
   const B = cur.boxes;
   let lastI = -1;
   for (let i = 0; i < B.length; i++) if (B[i] && i <= cap) lastI = i;
-  if (lastI < 0) { $('p2WinPx').textContent = 'brak świec'; $('p2WinB').innerHTML = '<p class="note">Brak widocznych świec w oknie.</p>'; return; }
+  if (lastI < 0) { $('p2WinPx').textContent = 'brak świec'; $('p2WinB').innerHTML = '<p class="note">Brak widocznych świec w oknie.</p>'; P2DATA = null; return; }
 
   const tHm = t => { t = String(t || '00:00'); return (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)); };
   const hmLab = m => { m = ((m % 1440) + 1440) % 1440; return String((m / 60 | 0) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
@@ -3015,14 +3083,14 @@ function drawP2Win(lastIdx){
   const price = B[lastI][4];
 
   // zakres osi: dzień bieżący + ost. 1 h + margines 25% (kontekst poprzednich dni), bez ekstremów z nocnych sesji wstecz
-  let lo = todayLo, hi = todayHi;
-  if (lhLo != null) lo = Math.min(lo, lhLo);
-  if (lhHi != null) hi = Math.max(hi, lhHi);
-  if (price != null) { lo = Math.min(lo, price); hi = Math.max(hi, price); }
-  const near = Math.max((hi - lo) * 0.25, 40);
-  lo -= near; hi += near;
-  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
-  const st = Math.max(1, niceStep((hi - lo) / 160) || 1);
+  let fullLo = todayLo, fullHi = todayHi;
+  if (lhLo != null) fullLo = Math.min(fullLo, lhLo);
+  if (lhHi != null) fullHi = Math.max(fullHi, lhHi);
+  if (price != null) { fullLo = Math.min(fullLo, price); fullHi = Math.max(fullHi, price); }
+  const near = Math.max((fullHi - fullLo) * 0.25, 40);
+  fullLo -= near; fullHi += near;
+  const pad = (fullHi - fullLo) * 0.06; fullLo -= pad; fullHi += pad;
+  const st = Math.max(1, niceStep((fullHi - fullLo) / 160) || 1);
 
   const laterRange = (fromIdx) => {
     const rr = [{ lo: todayLo, hi: todayHi }];
@@ -3052,16 +3120,17 @@ function drawP2Win(lastIdx){
     else if (inWin(i)) addBin(H, p, v, st);
   });
 
-  const overlaps = (k, a, b) => a != null && b != null && k <= b && k + st > a;
   const keys = new Set([...Object.keys(G), ...Object.keys(T), ...Object.keys(E), ...Object.keys(H)].map(Number));
-  let mxL = 1, mxR = 1, sumG = 0, sumT = 0, sumH = 0, sumE = 0, sumEmit = 0, sumEunm = 0, nMit = 0, nUnm = 0;
+  let sumG = 0, sumT = 0, sumH = 0, sumE = 0, sumEmit = 0, sumEunm = 0, nMit = 0, nUnm = 0, mxLfull = 1, mxRfull = 1;
+  const overlaps = (k, a, b) => a != null && b != null && k <= b && k + st > a;
   keys.forEach(k => {
-    if (k + st <= lo || k >= hi) return;
-    mxL = Math.max(mxL, (G[k] || 0) + (T[k] || 0));
-    mxR = Math.max(mxR, E[k] || 0, H[k] || 0);
+    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0;
+    sumG += gv; sumT += tv; sumH += hv; sumE += ev;
+    mxLfull = Math.max(mxLfull, gv + tv);
+    mxRfull = Math.max(mxRfull, ev, hv);
+    if (ev > 0) { if (overlaps(k, lhLo, lhHi)) { sumEmit += ev; nMit++; } else { sumEunm += ev; nUnm++; } }
   });
 
-  // POC / VA 70% z profilu dnia (T, widoczny zakres)
   const tks = Object.keys(T).map(Number).sort((a, b) => a - b);
   const tvs = tks.map(k => T[k]);
   const totT = tvs.reduce((a, b) => a + b, 0);
@@ -3075,6 +3144,36 @@ function drawP2Win(lastIdx){
     poc = tks[pi] + st / 2; vah = tks[a1] + st; val = tks[a0];
   }
 
+  const d0 = hist[0] ? hist[0].slice(8, 10) + '.' + hist[0].slice(5, 7) : '';
+  const d1 = hist.length ? hist[hist.length - 1].slice(8, 10) + '.' + hist[hist.length - 1].slice(5, 7) : '';
+  const dayLab = day.slice(8, 10) + '.' + day.slice(5, 7) + '.' + day.slice(0, 4);
+  const src = cur.src || pack[day].src || '';
+  const caveat = 'Prawy panel: baza to profil z godzin wcześniejszych niż ost. 1 h; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. 1 h (high/low świec M5), a nie przez dodanie wolumenu ost. godziny. Cienki pomarańcz to wolumen ost. 1 h (kontekst). Źródło: komórki footprintu M5 DA Flow (bid+ask).'
+    + (src ? ' ' + src + '.' : '');
+
+  const key = (typeof INST !== 'undefined' ? INST : 'US500') + '|' + day;
+  if (P2Z.key !== key) { P2Z.key = key; P2Z.day = day; P2Z.inst = INST; P2Z.zLo = P2Z.zHi = null; }
+
+  P2DATA = { G, T, E, H, st, fullLo, fullHi, keys, overlaps, lhLo, lhHi, sumG, sumT, sumH, sumE, sumEmit, sumEunm, nMit, nUnm, mxLfull, mxRfull, poc, vah, val, todayLo, todayHi, price, t0, t1, fmtN, fmtP, dayLab, d0, d1, hist, day, caveat, niceStep };
+  $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
+  paintP2Win();
+  p2Bind();
+}
+
+function paintP2Win(){
+  if (!P2DATA || !S.p2w || !$('p2WinB')) return;
+  const D = P2DATA, {G, T, E, H, st, keys, overlaps, lhLo, lhHi, fmtN, fmtP, niceStep} = D;
+  const v = p2Vis(), lo = v.lo, hi = v.hi;
+  const scaleView = P2Z.scaleView !== false;
+  let mxL = 1, mxR = 1;
+  if (scaleView) {
+    keys.forEach(k => {
+      if (k + st <= lo || k >= hi) return;
+      mxL = Math.max(mxL, (G[k] || 0) + (T[k] || 0));
+      mxR = Math.max(mxR, E[k] || 0, H[k] || 0);
+    });
+  } else { mxL = D.mxLfull; mxR = D.mxRfull; }
+
   const dark = document.documentElement.getAttribute('data-theme') === 'dark' ||
     (!document.documentElement.getAttribute('data-theme') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   const COL = { prior: dark ? '#9BB6D4' : '#0B1F3A', today: '#2BA8C4', hour: '#E35A12', mit: '#D5DAE0', mith: '#8B949E', price: dark ? '#F3F4F6' : '#111827', band: 'rgba(227,90,18,.14)', gold: '#C9A227' };
@@ -3086,19 +3185,20 @@ function drawP2Win(lastIdx){
   const axisW = 56, mid = W - pr - axisW, paneW = (mid - pl - gap) / 2;
   const xL0 = pl, xR0 = pl + paneW + gap, y0 = pt, ph = Hgt - pt - pb;
   const y = p => y0 + (hi - p) / (hi - lo) * ph;
-  const xLenL = v => (v / mxL) * (paneW - 8);
-  const xLenR = v => (v / mxR) * (paneW - 8);
+  const xLenL = vv => (vv / mxL) * (paneW - 8);
+  const xLenR = vv => (vv / mxR) * (paneW - 8);
   const bh = Math.max(1.2, (st / (hi - lo)) * ph - 0.4);
-
-  const d0 = hist[0] ? hist[0].slice(8, 10) + '.' + hist[0].slice(5, 7) : '';
-  const d1 = hist.length ? hist[hist.length - 1].slice(8, 10) + '.' + hist[hist.length - 1].slice(5, 7) : '';
-  const dayLab = day.slice(8, 10) + '.' + day.slice(5, 7) + '.' + day.slice(0, 4);
+  const showLabs = bh >= 8;
 
   let g = '';
-  g += `<defs><pattern id="dafP2hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${COL.mith}" stroke-width="1.6"/></pattern></defs>`;
+  g += `<defs><pattern id="dafP2hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${COL.mith}" stroke-width="1.6"/></pattern>`;
+  g += `<clipPath id="dafP2clipL"><rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath>`;
+  g += `<clipPath id="dafP2clipR"><rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath>`;
+  g += `<clipPath id="dafP2clipU"><rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}"/><rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}"/></clipPath></defs>`;
   const gridStep = niceStep((hi - lo) / 8);
-  for (let p = Math.ceil(lo / gridStep) * gridStep; p <= hi; p += gridStep) {
+  for (let p = Math.ceil(lo / gridStep) * gridStep; p <= hi + 1e-9; p += gridStep) {
     const yy = y(p);
+    if (yy < y0 - 2 || yy > y0 + ph + 2) continue;
     g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
     g += `<text x="${W - pr + 6}" y="${yy + 4}" font-size="11" fill="${mut}" font-family="IBM Plex Mono,monospace">${fmtN(p, gridStep < 1 ? 2 : 0)}</text>`;
@@ -3107,44 +3207,70 @@ function drawP2Win(lastIdx){
   g += `<text x="${xR0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Dziś wcześniej · mitygacja ost. 1 h</text>`;
 
   const ks = [...keys].sort((a, b) => a - b);
-  let maxK = null, maxV = -1;
+  let maxK = null, maxV = -1, bars = '', cands = [];
   ks.forEach(k => {
     if (k + st <= lo || k >= hi) return;
     const yy = y(k + st);
     const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0;
-    sumG += gv; sumT += tv; sumH += hv; sumE += ev;
-    if (gv > 0) g += `<rect x="${xL0}" y="${yy}" width="${xLenL(gv).toFixed(2)}" height="${bh}" fill="${COL.prior}"/>`;
-    if (tv > 0) g += `<rect x="${xL0 + xLenL(gv)}" y="${yy}" width="${xLenL(tv).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`;
+    if (gv > 0) bars += `<rect x="${xL0}" y="${yy}" width="${xLenL(gv).toFixed(2)}" height="${bh}" fill="${COL.prior}"/>`;
+    if (tv > 0) bars += `<rect x="${xL0 + xLenL(gv)}" y="${yy}" width="${xLenL(tv).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`;
     if (hv > 0) {
       const hw = Math.min(xLenL(hv), xLenL(tv) || xLenL(hv));
-      g += `<rect x="${(xL0 + xLenL(gv + Math.max(0, tv - hv))).toFixed(2)}" y="${yy}" width="${hw.toFixed(2)}" height="${bh}" fill="${COL.hour}"/>`;
+      bars += `<rect x="${(xL0 + xLenL(gv + Math.max(0, tv - hv))).toFixed(2)}" y="${yy}" width="${hw.toFixed(2)}" height="${bh}" fill="${COL.hour}"/>`;
     }
     const mit = overlaps(k, lhLo, lhHi);
     if (ev > 0) {
-      if (mit) { sumEmit += ev; nMit++; g += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="#D5DAE0"/><rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="url(#dafP2hatch)"/>`; }
-      else { sumEunm += ev; nUnm++; g += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`; }
+      if (mit) { bars += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="#D5DAE0"/><rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="url(#dafP2hatch)"/>`; }
+      else { bars += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`; }
     }
     if (hv > 0) {
       const ow = Math.max(1.5, xLenR(hv) * 0.55);
-      g += `<rect x="${xR0}" y="${yy}" width="${ow.toFixed(2)}" height="${Math.max(1, bh * 0.7)}" fill="${COL.hour}" fill-opacity="0.92"/>`;
+      bars += `<rect x="${xR0}" y="${yy}" width="${ow.toFixed(2)}" height="${Math.max(1, bh * 0.7)}" fill="${COL.hour}" fill-opacity="0.92"/>`;
     }
     const tot = gv + tv;
     if (tot > maxV) { maxV = tot; maxK = k; }
+    if (showLabs && (tot > 0 || ev > 0 || hv > 0)) cands.push({k, yy, tot, ev, hv, mit, gv, tv});
+  });
+  cands.sort((a, b) => (b.tot + b.ev) - (a.tot + a.ev));
+  const labGap = Math.max(11, bh + 1);
+  const placed = [];
+  const free = ty => placed.every(q => Math.abs(q - ty) >= labGap);
+  cands.forEach(c => {
+    const ty = c.yy + Math.max(9, bh * 0.72);
+    if (!free(ty)) return;
+    placed.push(ty);
+    if (c.tot > 0) {
+      const lab = `${fmtP(c.k)} · ${fmtN(c.tot, 0)}`;
+      const end = xL0 + xLenL(c.tot);
+      const inside = end - xL0 > 86;
+      const tx = inside ? end - 4 : Math.min(end + 4, xL0 + paneW - 4);
+      bars += `<text x="${tx}" y="${ty}" text-anchor="${inside ? 'end' : 'start'}" font-size="9.5" font-weight="600" fill="${inside ? '#fff' : ink}" font-family="IBM Plex Mono,monospace">${lab}</text>`;
+    }
+    if (c.ev > 0 || c.hv > 0) {
+      const labR = `${fmtP(c.k)} · ${fmtN(c.ev || c.hv, 0)}${c.mit && c.ev ? ' zm' : ''}`;
+      const endR = xR0 + xLenR(Math.max(c.ev, c.hv));
+      const insideR = endR - xR0 > 86;
+      const txR = insideR ? endR - 4 : Math.min(endR + 4, xR0 + paneW - 4);
+      bars += `<text x="${txR}" y="${ty}" text-anchor="${insideR ? 'end' : 'start'}" font-size="9.5" font-weight="600" fill="${insideR ? '#fff' : ink}" font-family="IBM Plex Mono,monospace">${labR}</text>`;
+    }
   });
   if (maxK != null) {
     const yy = y(maxK + st);
-    g += `<rect x="${xL0}" y="${yy}" width="${xLenL(maxV).toFixed(2)}" height="${bh}" fill="none" stroke="${COL.gold}" stroke-width="1.2"/>`;
+    bars += `<rect x="${xL0}" y="${yy}" width="${xLenL(maxV).toFixed(2)}" height="${bh}" fill="none" stroke="${COL.gold}" stroke-width="1.2"/>`;
   }
+  g += `<g clip-path="url(#dafP2clipU)">${bars}</g>`;
+
   if (lhLo != null && lhHi != null) {
     const yTop = y(lhHi), yBot = y(lhLo);
-    g += `<rect x="${xR0}" y="${yTop}" width="${paneW}" height="${Math.max(1, yBot - yTop)}" fill="${COL.band}"/>`;
+    g += `<g clip-path="url(#dafP2clipR)"><rect x="${xR0}" y="${yTop}" width="${paneW}" height="${Math.max(1, yBot - yTop)}" fill="${COL.band}"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yTop}" y2="${yTop}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yBot}" y2="${yBot}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
-    g += `<text x="${xR0 + paneW - 4}" y="${yTop - 3}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">hi ost. 1 h ${fmtP(lhHi)}</text>`;
-    g += `<text x="${xR0 + paneW - 4}" y="${yBot + 11}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">lo ost. 1 h ${fmtP(lhLo)}</text>`;
+    if (yTop >= y0 && yTop <= y0 + ph) g += `<text x="${xR0 + paneW - 4}" y="${yTop - 3}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">hi ost. 1 h ${fmtP(lhHi)}</text>`;
+    if (yBot >= y0 && yBot <= y0 + ph) g += `<text x="${xR0 + paneW - 4}" y="${yBot + 11}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">lo ost. 1 h ${fmtP(lhLo)}</text></g>`;
+    else g += `</g>`;
   }
   const lvls = [
-    [todayHi, 'High', mut], [vah, 'VAH', mut], [poc, 'POC', COL.gold], [val, 'VAL', mut], [todayLo, 'Low', mut], [price, 'cena', COL.price]
+    [D.todayHi, 'High', mut], [D.vah, 'VAH', mut], [D.poc, 'POC', COL.gold], [D.val, 'VAL', mut], [D.todayLo, 'Low', mut], [D.price, 'cena', COL.price]
   ];
   lvls.forEach(([p, lab, col]) => {
     if (p == null || p < lo || p > hi) return;
@@ -3152,50 +3278,51 @@ function drawP2Win(lastIdx){
     g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
     g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
   });
-  if (price != null) {
-    const yy = y(price);
+  if (D.price != null && D.price >= lo && D.price <= hi) {
+    const yy = y(D.price);
     g += `<rect x="${W - pr - axisW}" y="${yy - 8}" width="${axisW - 4}" height="16" rx="2" fill="${COL.price}"/>`;
-    g += `<text x="${W - pr - axisW + axisW / 2 - 2}" y="${yy + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${dark ? '#111' : '#fff'}" font-family="IBM Plex Mono,monospace">${fmtP(price)}</text>`;
+    g += `<text x="${W - pr - axisW + axisW / 2 - 2}" y="${yy + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${dark ? '#111' : '#fff'}" font-family="IBM Plex Mono,monospace">${fmtP(D.price)}</text>`;
   }
   g += `<rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
   g += `<rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
+  // axis hit area (przezroczysta), do przeciągania pionowego
+  g += `<rect id="p2axis" x="${W - pr - axisW}" y="${y0}" width="${axisW + pr}" height="${ph}" fill="transparent"/>`;
 
-  const fy = Hgt - pb + 20, pct = sumE > 0 ? (100 * sumEmit / sumE) : 0;
-  const swatch = (x, y, col, hatch) => {
-    let o = `<rect x="${x}" y="${y - 8}" width="10" height="10" fill="${col}" ${hatch ? 'stroke="#8B949E"' : ''}/>`;
-    if (hatch) o += `<rect x="${x}" y="${y - 8}" width="10" height="10" fill="url(#dafP2hatch)"/>`;
+  const fy = Hgt - pb + 20, pct = D.sumE > 0 ? (100 * D.sumEmit / D.sumE) : 0;
+  const swatch = (x, yy, col, hatch) => {
+    let o = `<rect x="${x}" y="${yy - 8}" width="10" height="10" fill="${col}" ${hatch ? 'stroke="#8B949E"' : ''}/>`;
+    if (hatch) o += `<rect x="${x}" y="${yy - 8}" width="10" height="10" fill="url(#dafP2hatch)"/>`;
     return o;
   };
-  const line = (x, y, col, lab, hatch) => swatch(x, y, col, hatch) + `<text x="${x + 14}" y="${y}" font-size="11" fill="${ink}" font-family="IBM Plex Sans,sans-serif">${lab}</text>`;
-  g += line(xL0, fy, COL.prior, `poprzednie dni  suma ${fmtN(sumG, 0)}`);
-  g += line(xL0, fy + 16, COL.today, `dziś (bez ost. 1 h)  suma ${fmtN(sumT - sumH, 0)}`);
-  g += line(xL0, fy + 32, COL.hour, `ost. 1 h  ${t0}–${t1}  suma ${fmtN(sumH, 0)}`);
+  const line = (x, yy, col, lab, hatch) => swatch(x, yy, col, hatch) + `<text x="${x + 14}" y="${yy}" font-size="11" fill="${ink}" font-family="IBM Plex Sans,sans-serif">${lab}</text>`;
+  g += line(xL0, fy, COL.prior, `poprzednie dni  suma ${fmtN(D.sumG, 0)}`);
+  g += line(xL0, fy + 16, COL.today, `dziś (bez ost. 1 h)  suma ${fmtN(D.sumT - D.sumH, 0)}`);
+  g += line(xL0, fy + 32, COL.hour, `ost. 1 h  ${D.t0}–${D.t1}  suma ${fmtN(D.sumH, 0)}`);
   g += line(xL0, fy + 48, COL.gold, `max / POC`);
-  g += line(xR0, fy, COL.today, `dziś wcześniej – niezmitygowane  suma ${fmtN(sumEunm, 0)}  (${nUnm} bin)`);
-  g += line(xR0, fy + 16, '#D5DAE0', `zmitygowane w ost. 1 h  suma ${fmtN(sumEmit, 0)}  (${nMit} bin, ${fmtN(pct, 1)}%)`, true);
-  g += line(xR0, fy + 32, COL.hour, `ost. 1 h (cienki pasek)  suma ${fmtN(sumH, 0)}`);
-  g += `<text x="${xL0}" y="${fy + 70}" font-size="10.5" fill="${mut}" font-family="IBM Plex Sans,sans-serif">Zakres ost. 1 h (M5 high/low): ${lhLo != null ? fmtP(lhLo) : '–'} – ${lhHi != null ? fmtP(lhHi) : '–'} · krok bin ${fmtN(st, st < 1 ? 2 : 0)} · POC ${poc != null ? fmtP(poc) : '–'}  VAH ${vah != null ? fmtP(vah) : '–'}  VAL ${val != null ? fmtP(val) : '–'}</text>`;
+  g += line(xR0, fy, COL.today, `dziś wcześniej – niezmitygowane  suma ${fmtN(D.sumEunm, 0)}  (${D.nUnm} bin)`);
+  g += line(xR0, fy + 16, '#D5DAE0', `zmitygowane w ost. 1 h  suma ${fmtN(D.sumEmit, 0)}  (${D.nMit} bin, ${fmtN(pct, 1)}%)`, true);
+  g += line(xR0, fy + 32, COL.hour, `ost. 1 h (cienki pasek)  suma ${fmtN(D.sumH, 0)}`);
+  g += `<text x="${xL0}" y="${fy + 70}" font-size="10.5" fill="${mut}" font-family="IBM Plex Sans,sans-serif">Zakres ost. 1 h (M5 high/low): ${lhLo != null ? fmtP(lhLo) : '–'} – ${lhHi != null ? fmtP(lhHi) : '–'} · krok bin ${fmtN(st, st < 1 ? 2 : 0)} · POC ${D.poc != null ? fmtP(D.poc) : '–'}  VAH ${D.vah != null ? fmtP(D.vah) : '–'}  VAL ${D.val != null ? fmtP(D.val) : '–'}</text>`;
 
-  const src = cur.src || pack[day].src || '';
-  const caveat = 'Prawy panel: baza to profil z godzin wcześniejszych niż ost. 1 h; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. 1 h (high/low świec M5), a nie przez dodanie wolumenu ost. godziny. Cienki pomarańcz to wolumen ost. 1 h (kontekst). Źródło: komórki footprintu M5 DA Flow (bid+ask).'
-    + (src ? ' ' + src + '.' : '');
-
-  $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
-  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh);cursor:crosshair" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}<g id="p2xh" pointer-events="none"></g></svg><p class="note">${caveat}</p>`;
-  window._P2_DAF = { t0, t1, lhLo, lhHi, st, sumE, sumEmit, sumEunm, sumH, sumG, sumT, nMit, nUnm, price, poc, day, lastI, lo, hi };
+  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh);cursor:crosshair" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}<g id="p2sel" pointer-events="none"></g><g id="p2xh" pointer-events="none"></g></svg><p class="note">${D.caveat}</p>`;
+  window._P2_DAF = { t0: D.t0, t1: D.t1, lhLo, lhHi, st, sumE: D.sumE, sumEmit: D.sumEmit, sumEunm: D.sumEunm, sumH: D.sumH, sumG: D.sumG, sumT: D.sumT, nMit: D.nMit, nUnm: D.nUnm, price: D.price, poc: D.poc, day: D.day, lo, hi, fullLo: D.fullLo, fullHi: D.fullHi };
   window.P2XH = { W, Hgt, xL0, xR0, paneW, y0, ph, lo, hi, st, G, T, E, Hmap: H, fmtP, fmtN, pr, axisW, lhLo, lhHi };
-  xhInitP2();
+
+  if ($('p2Zr')) $('p2Zr').disabled = !p2IsZoomed();
+  if ($('p2Zs')) $('p2Zs').checked = P2Z.scaleView !== false;
+  if ($('p2Zrng')) $('p2Zrng').textContent = p2IsZoomed() ? `${fmtP(lo)} – ${fmtP(hi)}` : 'pełny zakres';
 }
-function xhInitP2() {
+
+function p2Bind() {
   const box = $('p2WinB'); if (!box || box.dataset.xhBound) return; box.dataset.xhBound = '1';
-  const off = () => { const g = $('p2xh'); if (g) g.innerHTML = ''; };
-  const move = e => {
-    const X = window.P2XH, sv = e.target.closest && e.target.closest('#p2svg'); if (!X || !sv) { off(); return; }
-    const ctm = sv.getScreenCTM(); if (!ctm) return;
-    const pt = sv.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const P = pt.matrixTransform(ctm.inverse());
+  const offXh = () => { const g = $('p2xh'); if (g && !P2Z.drag) g.innerHTML = ''; };
+  const moveXh = e => {
+    if (P2Z.drag) return;
+    const X = window.P2XH, sv = e.target.closest && e.target.closest('#p2svg'); if (!X || !sv) { offXh(); return; }
+    const P = p2SvgPoint(sv, e); if (!P) return;
     const {xL0, xR0, paneW, y0, ph, lo, hi, st, W, pr, axisW} = X;
-    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW && P.x <= W - pr;
-    if (P.y < y0 - 2 || P.y > y0 + ph + 2 || !(inL || inR || inAx)) { off(); return; }
+    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW && P.x <= W - pr + 8;
+    if (P.y < y0 - 2 || P.y > y0 + ph + 2 || !(inL || inR || inAx)) { offXh(); return; }
     const p = hi - (P.y - y0) / ph * (hi - lo), Y = Math.max(y0, Math.min(y0 + ph, P.y));
     const k = Math.floor(p / st + 1e-9) * st, gv = X.G[k] || 0, tv = X.T[k] || 0, ev = X.E[k] || 0, hv = X.Hmap[k] || 0;
     const mit = X.lhLo != null && X.lhHi != null && k <= X.lhHi && k + st > X.lhLo;
@@ -3205,12 +3332,111 @@ function xhInitP2() {
     vol += ` · prawy ${X.fmtN(ev, 0)}${mit ? ' (zmityg.)' : ' (niezmityg.)'}`;
     const wl = Math.max(axisW - 4, lab.length * 6.6 + 10), bx = W - pr - axisW + (axisW - wl) / 2;
     const vw = Math.min(420, vol.length * 6.2 + 12), vx = Math.max(xL0, Math.min(xR0 + paneW - vw, (inR ? xR0 : xL0) + 8)), vy = Y + 20 > y0 + ph - 4 ? Y - 22 : Y + 10;
-    $('p2xh').innerHTML = `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
+    if ($('p2xh')) $('p2xh').innerHTML = `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
       + `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${Y}" y2="${Y}" stroke="${ink}" stroke-width="1" stroke-dasharray="3 2"/>`
       + `<rect x="${bx}" y="${Y - 8}" width="${wl}" height="16" rx="3" fill="${ink}"/><text x="${bx + wl / 2}" y="${Y + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${lab}</text>`
       + `<rect x="${vx}" y="${vy}" width="${vw}" height="16" rx="3" fill="${ink}"/><text x="${vx + vw / 2}" y="${vy + 12}" text-anchor="middle" font-size="10" font-weight="700" fill="${pan}" font-family="var(--mono, monospace)">${vol}</text>`;
   };
-  box.addEventListener('pointermove', move); box.addEventListener('mousemove', move);
-  box.addEventListener('pointerleave', off); box.addEventListener('mouseleave', off);
+  const inPlot = (P, X) => {
+    if (!P || !X) return false;
+    const {xL0, xR0, paneW, y0, ph, W, pr, axisW} = X;
+    const inL = P.x >= xL0 && P.x <= xL0 + paneW, inR = P.x >= xR0 && P.x <= xR0 + paneW, inAx = P.x >= W - pr - axisW;
+    return P.y >= y0 - 2 && P.y <= y0 + ph + 2 && (inL || inR || inAx);
+  };
+  const onWheel = e => {
+    const sv = e.target.closest && e.target.closest('#p2svg'); if (!sv || !P2DATA) return;
+    const P = p2SvgPoint(sv, e), X = window.P2XH; if (!inPlot(P, X)) return;
+    e.preventDefault();
+    const price = p2PriceFromY(P.y); if (price == null) return;
+    p2ZoomAt(price, e.deltaY > 0 ? 1.18 : 1 / 1.18);
+  };
+  const onDown = e => {
+    if (e.button != null && e.button !== 0) return;
+    const sv = e.target.closest && e.target.closest('#p2svg'); if (!sv || !P2DATA) return;
+    const P = p2SvgPoint(sv, e), X = window.P2XH; if (!inPlot(P, X)) return;
+    const price = p2PriceFromY(Math.max(X.y0, Math.min(X.y0 + X.ph, P.y)));
+    const onAx = P.x >= X.W - X.pr - X.axisW;
+    if (!P2Z.ptrs) P2Z.ptrs = new Map();
+    P2Z.ptrs.set(e.pointerId, {y: P.y, p: price});
+    if (P2Z.ptrs.size === 2) {
+      const arr = [...P2Z.ptrs.values()];
+      P2Z.drag = { typ: 'pinch', y0: Math.abs(arr[0].y - arr[1].y), span: p2Vis().hi - p2Vis().lo, mid: (arr[0].p + arr[1].p) / 2 };
+      try { box.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+    P2Z.drag = { typ: (e.shiftKey || onAx) && p2IsZoomed() ? 'pan' : 'sel', y0: P.y, p0: price, lo0: p2Vis().lo, hi0: p2Vis().hi, moved: false };
+    try { box.setPointerCapture(e.pointerId); } catch (err) {}
+  };
+  const onMove = e => {
+    if (!P2Z.drag) { moveXh(e); return; }
+    const sv = $('p2svg'); if (!sv) return;
+    const P = p2SvgPoint(sv, e), X = window.P2XH; if (!P || !X) return;
+    const Y = Math.max(X.y0, Math.min(X.y0 + X.ph, P.y));
+    const price = p2PriceFromY(Y);
+    if (P2Z.drag.typ === 'pinch') {
+      if (P2Z.ptrs && P2Z.ptrs.has(e.pointerId)) P2Z.ptrs.set(e.pointerId, {y: P.y, p: price});
+      if (P2Z.ptrs && P2Z.ptrs.size >= 2 && P2Z.drag.y0 > 4) {
+        const arr = [...P2Z.ptrs.values()];
+        const dy = Math.abs(arr[0].y - arr[1].y);
+        const factor = P2Z.drag.y0 / Math.max(4, dy);
+        const span = Math.max(p2MinSpan(), Math.min(p2FullSpan(), P2Z.drag.span * factor));
+        p2SetView(P2Z.drag.mid - span / 2, P2Z.drag.mid + span / 2);
+        paintP2WinSoon();
+      }
+      return;
+    }
+    if (Math.abs(Y - P2Z.drag.y0) > 5) P2Z.drag.moved = true;
+    if (P2Z.drag.typ === 'pan') {
+      const d = P2Z.drag;
+      const priceNow = d.hi0 - (Y - X.y0) / X.ph * (d.hi0 - d.lo0);
+      p2SetView(d.lo0 + (d.p0 - priceNow), d.hi0 + (d.p0 - priceNow), false);
+      paintP2WinSoon();
+      return;
+    }
+    // rubber-band
+    const yA = Math.min(P2Z.drag.y0, Y), yB = Math.max(P2Z.drag.y0, Y);
+    if ($('p2sel')) $('p2sel').innerHTML = `<rect x="${X.xL0}" y="${yA}" width="${X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`
+      + `<rect x="${X.xR0}" y="${yA}" width="${X.paneW}" height="${Math.max(1, yB - yA)}" fill="var(--ewr)" opacity=".16" stroke="var(--ewr)" stroke-width="1" stroke-dasharray="3 2"/>`;
+    if ($('p2xh')) $('p2xh').innerHTML = '';
+  };
+  const onUp = e => {
+    const drag = P2Z.drag;
+    if (P2Z.ptrs) P2Z.ptrs.delete(e.pointerId);
+    if (!drag) return;
+    if (drag.typ === 'pinch') {
+      if (!P2Z.ptrs || P2Z.ptrs.size < 2) { P2Z.drag = null; }
+      return;
+    }
+    P2Z.drag = null;
+    try { box.releasePointerCapture(e.pointerId); } catch (err) {}
+    if (drag.typ === 'sel' && drag.moved) {
+      const p0 = drag.p0, sv = $('p2svg'), P = p2SvgPoint(sv, e), p1 = p2PriceFromY(P && window.P2XH ? Math.max(window.P2XH.y0, Math.min(window.P2XH.y0 + window.P2XH.ph, P.y)) : p0);
+      const lo = Math.min(p0, p1), hi = Math.max(p0, p1);
+      if (hi - lo >= p2MinSpan() * 0.35) { p2SetView(lo, hi); paintP2Win(); }
+      else if ($('p2sel')) $('p2sel').innerHTML = '';
+    } else if ($('p2sel')) $('p2sel').innerHTML = '';
+  };
+  const onDbl = e => {
+    const sv = e.target.closest && e.target.closest('#p2svg'); if (!sv) return;
+    e.preventDefault();
+    p2ResetZoom();
+  };
+  box.addEventListener('pointermove', onMove);
+  box.addEventListener('mousemove', e => { if (!P2Z.drag) moveXh(e); });
+  box.addEventListener('pointerleave', offXh);
+  box.addEventListener('mouseleave', offXh);
+  box.addEventListener('wheel', onWheel, {passive: false});
+  box.addEventListener('pointerdown', onDown);
+  box.addEventListener('pointerup', onUp);
+  box.addEventListener('pointercancel', onUp);
+  box.addEventListener('dblclick', onDbl);
 }
 
+function p2BindToolbar() {
+  if (p2BindToolbar.ok) return; p2BindToolbar.ok = 1;
+  if ($('p2Zm')) $('p2Zm').onclick = () => p2ZoomCenter(1.25);
+  if ($('p2Zp')) $('p2Zp').onclick = () => p2ZoomCenter(1 / 1.25);
+  if ($('p2Zr')) $('p2Zr').onclick = () => p2ResetZoom();
+  if ($('p2Zs')) $('p2Zs').onchange = e => { P2Z.scaleView = e.target.checked; paintP2Win(); };
+}
+p2BindToolbar();
