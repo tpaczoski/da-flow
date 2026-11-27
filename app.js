@@ -49,6 +49,7 @@ let FIRST_VISIT = true;
 try { const raw = localStorage.getItem('fp-us500'); if (raw) FIRST_VISIT = false; const s = JSON.parse(raw || '{}'); Object.assign(S, s); } catch (e) {}
 if (/(?:^|[?&])hvn=1(?:&|$)/.test(location.search)) S.hvw = true;
 if (/(?:^|[?&])cta=1(?:&|$)/.test(location.search)) S.ctw = true;
+if (/(?:^|[?&])p2=1(?:&|$)/.test(location.search)) S.p2w = true;
 if (/(?:^|[?&])opcje=1(?:&|$)/.test(location.search)) { S.gxm = true; S.sig = true; }
 if (/(?:^|[?&])compact=1(?:&|$)/.test(location.search)) S.ctrlOpen = false;
 { const md = location.search.match(/(?:^|[?&])day=(\d{4}-\d{2}-\d{2})/); if (md) S.day = md[1]; }
@@ -90,6 +91,8 @@ $('vaWinX').onclick = () => { S.vaw = false; save(); render(true); };
 $('showDLW').onchange = e => { S.dlw = e.target.checked; save(); render(true); };
 $('showPSW').onchange = e => { S.psw = e.target.checked; save(); render(true); };
 $('psWinX').onclick = () => { S.psw = false; save(); render(true); };
+$('showP2W').onchange = e => { S.p2w = e.target.checked; save(); render(true); };
+$('p2WinX').onclick = () => { S.p2w = false; save(); render(true); };
 $('dlWinX').onclick = () => { S.dlw = false; save(); render(true); };
 $('showKRW').onchange = e => { S.krw = e.target.checked; save(); render(true); };
 $('krWinX').onclick = () => { S.krw = false; save(); render(true); };
@@ -124,7 +127,7 @@ const dragWin = (wid, hid, xid, key) => { // przeciąganie pływających okien (
   h.addEventListener('pointermove', e => { if (!d) return; S[key] = {x: e.clientX - d.dx, y: e.clientY - d.dy}; place(); });
   h.addEventListener('pointerup', () => { if (d) { d = null; save(); } });
 };
-dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos'); dragWin('hvWin', 'hvWinH', 'hvWinX', 'hvwPos'); dragWin('ctWin', 'ctWinH', 'ctWinX', 'ctwPos');
+dragWin.z = 30; dragWin('vaWin', 'vaWinH', 'vaWinX', 'vawPos'); dragWin('dlWin', 'dlWinH', 'dlWinX', 'dlwPos'); dragWin('psWin', 'psWinH', 'psWinX', 'pswPos'); dragWin('cdWin', 'cdWinH', 'cdWinX', 'cdwPos'); dragWin('inWin', 'inWinH', 'inWinX', 'inwPos'); dragWin('evWin', 'evWinH', 'evWinX', 'evwPos'); dragWin('mkWin', 'mkWinH', 'mkWinX', 'mkwPos'); dragWin('opWin', 'opWinH', 'opWinX', 'opwPos'); dragWin('omWin', 'omWinH', 'omWinX', 'omwPos'); dragWin('zgWin', 'zgWinH', 'zgWinX', 'zgwPos'); dragWin('mtWin', 'mtWinH', 'mtWinX', 'mtwPos'); dragWin('djWin', 'djWinH', 'djWinX', 'djwPos'); dragWin('lnWin', 'lnWinH', 'lnWinX', 'lnwPos'); dragWin('krWin', 'krWinH', 'krWinX', 'krwPos'); dragWin('hvWin', 'hvWinH', 'hvWinX', 'hvwPos'); dragWin('p2Win', 'p2WinH', 'p2WinX', 'p2wPos'); dragWin('ctWin', 'ctWinH', 'ctWinX', 'ctwPos');
 $('pfTreeV').onchange = e => { S.treeV = e.target.checked; save(); render(true); };
 // odtwarzanie (replay)
 let RPN_MAX = 0, RP_T = null;
@@ -537,9 +540,10 @@ function gexHeatSVG(y, lo, hi, W) {
 function render(keep) {
   applyMode();
   document.querySelectorAll('.seg:not(#theme)').forEach(s => s.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v == S[{tf: 'tf', rng: 'rng', bin: 'bin', vwm: 'vw'}[s.id]]))));
-  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; if ($('showGXM')) $('showGXM').checked = S.gxm !== false; if ($('showSIG')) $('showSIG').checked = S.sig !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showCTW').checked = !!S.ctw; $('showPSW').checked = !!S.psw; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
+  $('showREF').checked = S.ref !== false; $('showNK').checked = S.naked !== false; $('showOPT').checked = S.opt !== false; $('showATR').checked = S.atr !== false; if ($('showGXM')) $('showGXM').checked = S.gxm !== false; if ($('showSIG')) $('showSIG').checked = S.sig !== false; $('showST').checked = !!S.st; $('showSUM').checked = S.sumOn !== false; $('sum').hidden = S.sumOn === false; $('showLEG').checked = S.legOn !== false; $('legBox').hidden = S.legOn === false; $('showEA').checked = S.ea !== false; $('showUT').checked = S.trap !== false; $('showZF').checked = !!S.zf; $('showOB').checked = S.ob !== false; $('showVP').checked = S.vp !== false; $('showHR').checked = S.hr !== false; $('showFVG').checked = !!S.fvg; $('showEW').checked = S.ew !== false; $('pfTree').checked = !!S.tree; $('showVAW').checked = !!S.vaw; $('showDLW').checked = !!S.dlw; $('showLNW').checked = !!S.lnw; $('showKRW').checked = !!S.krw; $('showHVW').checked = !!S.hvw; $('showCTW').checked = !!S.ctw; $('showPSW').checked = !!S.psw; if ($('showP2W')) $('showP2W').checked = !!S.p2w; $('showINW').checked = !!S.inw; $('showMTW').checked = !!S.mtw; $('showDJW').checked = !!S.djw; $('showEVW').checked = !!S.evw; $('showMKW').checked = !!S.mkw; $('showOPW').checked = !!S.opw; $('showOMW').checked = !!S.omw; $('showZGW').checked = !!S.zgw; $('pfTreeV').checked = !!S.treeV; $('pfTreeV').disabled = !S.tree; $('pfTreeV').parentNode.style.opacity = S.tree ? 1 : .45;
   drawHvnWin();
   drawCtaWin();
+  try { drawP2Win(Infinity); } catch (e) { console.warn('p2', e); }
   markPreset();
   $('rpBar').hidden = !S.rp; $('rpOn').setAttribute('aria-pressed', String(!!S.rp)); $('rpOn').textContent = S.rp ? '■ zakończ odtwarzanie' : '▶ Odtwarzanie';
   $('day').value = S.day; $('showVA').checked = S.va; $('showZ').checked = S.z; $('zDim').checked = S.zDim !== false; $('showN').checked = S.nodes !== false; $('showD').checked = S.div !== false; $('showCZ').checked = S.cz !== false; $('showDP').checked = !!S.dp; $('showVX').checked = S.vx !== false; $('vxInv').checked = S.vxInv !== false; $('showUA').checked = S.ua !== false; $('showTV').checked = !!S.tv; for (const k of ['ba', 'v', 'd']) $('cell_' + k).checked = S.cell[k] !== false; for (const k of PFK) $('pf_' + k).checked = !!S.pf[k];
@@ -1824,6 +1828,7 @@ function render(keep) {
       $('psWinPx').innerHTML = `${INST} · ${Number.isFinite(RL) ? 'stan na ' + LT : 'do ostatniej świecy'}${LPx != null ? ' · cena ' + f(LPx) : ''}`;
       $('psWinB').innerHTML = `<svg viewBox="0 0 ${Wd} ${Hd}" width="100%" style="display:block;max-height:min(600px,62vh);cursor:crosshair" role="img" aria-label="Profile sesji"${xhA({x0: L0, x1: Wd - R0, y0: T0, y1: Hd - B0, v0: lo, v1: hi, f: 'p', ys: 'l'})}>${G.join('')}</svg>`
         + `<p class="note">Profile wolumenu z footprintu 5 min (cała doba sesji DA; krok ${f(bin)} pkt): jaśniej = noc (do startu sesji kasowej), ciemniej = sesja kasowa. Niebieska linia = ruch ceny w sesji (zamknięcia świec 5 min, czas od lewej do prawej w szerokości kolumny; cienka = noc i po sesji, gruba = sesja kasowa, kropka = ostatnia cena). Tło = VA 70%, złoty = POC, nad kolumną delta sesji. Ostatnia kolumna (Σ, złote tło) = profil zbiorczy wszystkich pokazanych sesji z własnym VA 70% i POC; przedostatnia = wybrana sesja do ${Number.isFinite(RL) ? 'bieżącej świecy odtwarzania' : 'ostatniej świecy w danych'}. Fioletowe przerywane = nPOC – POC sesji (do 20 wstecz w danych: ${hist.length}), do którego cena nie wróciła w kolejnych sesjach; ✓ = dotknięty w wybranej sesji. Otwartych nPOC: ${open.length}${open.length ? ' (' + open.map(q => f(q.x - TK / 2)).join(', ') + ')' : ''}. Dni bez eksportu w danych są pomijane – nPOC może być „dotknięty” w dniu, którego nie ma. Status: <span class="st stb" title="Naked POC jako magnes – bez przewagi (21.10.2026); pierwszy test naked 75% wobec 70% dla losowych nietkniętych poziomów – obserwacja">opis</span></p>`; } }
+  try { drawP2Win(Number.isFinite(RLd) ? RLd : Infinity); } catch (e) { console.warn('p2', e); }
   // okno intraday: wybrana sesja w świecach 15 / 30 / 60 min (z 5 min) – OHLC, delta, CVD od początku doby, wolumen
   { const box = $('inWin'); box.hidden = !S.inw;
     if (S.inw) {
@@ -2705,3 +2710,232 @@ function paintCtaWin(){
     });
   }
 }
+
+
+// v1.12 okno dwóch paneli profilu niezmitygowanego (US500)
+function drawP2Win(lastIdx){
+  const box = $('p2Win'); if (!box) return;
+  box.hidden = !S.p2w;
+  if ($('showP2W')) $('showP2W').checked = !!S.p2w;
+  if (!S.p2w) return;
+  const pack = (CACHE && CACHE.US500) || (INST === 'US500' ? DATA : null);
+  if (!pack || typeof pack !== 'object') {
+    $('p2WinPx').textContent = 'brak danych US500';
+    $('p2WinB').innerHTML = '<p class="note">Brak CACHE.US500 – okno jest dostępne tylko dla US500.</p>';
+    return;
+  }
+  const days = Object.keys(pack).sort();
+  const day = pack[S.day] ? S.day : days[days.length - 1];
+  const cur = pack[day];
+  if (!cur || !cur.boxes || !cur.boxes.length) {
+    $('p2WinPx').textContent = 'brak sesji';
+    $('p2WinB').innerHTML = '<p class="note">Brak świec US500 dla wybranej sesji.</p>';
+    return;
+  }
+  const cap = (Number.isFinite(lastIdx) ? lastIdx : Infinity);
+  const B = cur.boxes;
+  let lastI = -1;
+  for (let i = 0; i < B.length; i++) if (B[i] && i <= cap) lastI = i;
+  if (lastI < 0) { $('p2WinPx').textContent = 'brak świec'; $('p2WinB').innerHTML = '<p class="note">Brak widocznych świec w oknie.</p>'; return; }
+
+  const tHm = t => { t = String(t || '00:00'); return (+t.slice(0, 2)) * 60 + (+t.slice(3, 5)); };
+  const hmLab = m => { m = ((m % 1440) + 1440) % 1440; return String((m / 60 | 0) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+  const niceStep = x => {
+    if (!(x > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(x))), e = x / p;
+    return (e <= 1 ? 1 : e <= 2 ? 2 : e <= 5 ? 5 : 10) * p;
+  };
+  const binp = (p, st) => Math.floor(p / st + 1e-9) * st;
+  const addBin = (map, p, v, st) => { if (!(v > 0)) return; const k = binp(p, st); map[k] = (map[k] || 0) + v; };
+  const fmtN = (v, d) => Number(v).toLocaleString('pl-PL', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+  const fmtP = v => fmtN(v, Math.max(1, DEC || 1));
+
+  const lastT = tHm(B[lastI][0]);
+  const tf = lastI > 0 && B[lastI - 1] ? Math.max(1, tHm(B[lastI][0]) - tHm(B[lastI - 1][0])) : 5;
+  const tEnd = lastT + tf, tStart = tEnd - 60;
+  const t0 = hmLab(tStart), t1 = hmLab(tEnd);
+
+  const inWin = i => { const tm = tHm(B[i][0]); return tm >= tStart && tm < tEnd; };
+  const before = i => tHm(B[i][0]) < tStart;
+
+  let lhLo = Infinity, lhHi = -Infinity;
+  for (let i = 0; i <= lastI; i++) if (B[i] && inWin(i)) { lhLo = Math.min(lhLo, B[i][3]); lhHi = Math.max(lhHi, B[i][2]); }
+  if (!Number.isFinite(lhLo)) { lhLo = null; lhHi = null; }
+
+  const histAll = days.filter(k => k < day);
+  const hist = histAll.slice(-22);
+  const todayLo = Math.min.apply(null, B.filter((b, i) => b && i <= lastI).map(b => b[3]));
+  const todayHi = Math.max.apply(null, B.filter((b, i) => b && i <= lastI).map(b => b[2]));
+  const price = B[lastI][4];
+
+  // zakres osi: dzień bieżący + ost. 1 h + margines 25% (kontekst poprzednich dni), bez ekstremów z nocnych sesji wstecz
+  let lo = todayLo, hi = todayHi;
+  if (lhLo != null) lo = Math.min(lo, lhLo);
+  if (lhHi != null) hi = Math.max(hi, lhHi);
+  if (price != null) { lo = Math.min(lo, price); hi = Math.max(hi, price); }
+  const near = Math.max((hi - lo) * 0.25, 40);
+  lo -= near; hi += near;
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+  const st = Math.max(1, niceStep((hi - lo) / 160) || 1);
+
+  const laterRange = (fromIdx) => {
+    const rr = [{ lo: todayLo, hi: todayHi }];
+    for (let j = fromIdx + 1; j < hist.length; j++) {
+      const V = pack[hist[j]], bx = V.boxes || [];
+      if (!bx.length) continue;
+      rr.push({ lo: Math.min.apply(null, bx.map(b => b[3])), hi: Math.max.apply(null, bx.map(b => b[2])) });
+    }
+    return rr;
+  };
+  const isHit = (p, rr) => rr.some(r => r.lo != null && r.hi != null && r.lo <= p && p <= r.hi);
+
+  const G = {}, T = {}, E = {}, H = {};
+  hist.forEach((k, i) => {
+    const V = pack[k], rr = laterRange(i);
+    (V.cells || []).forEach(c => {
+      const p = c[1], v = (c[2] || 0) + (c[3] || 0);
+      if (!(v > 0) || isHit(p, rr)) return;
+      addBin(G, p, v, st);
+    });
+  });
+  (cur.cells || []).forEach(c => {
+    const i = c[0], p = c[1], v = (c[2] || 0) + (c[3] || 0);
+    if (i > lastI || !(v > 0) || !B[i]) return;
+    addBin(T, p, v, st);
+    if (before(i)) addBin(E, p, v, st);
+    else if (inWin(i)) addBin(H, p, v, st);
+  });
+
+  const overlaps = (k, a, b) => a != null && b != null && k <= b && k + st > a;
+  const keys = new Set([...Object.keys(G), ...Object.keys(T), ...Object.keys(E), ...Object.keys(H)].map(Number));
+  let mxL = 1, mxR = 1, sumG = 0, sumT = 0, sumH = 0, sumE = 0, sumEmit = 0, sumEunm = 0, nMit = 0, nUnm = 0;
+  keys.forEach(k => {
+    if (k + st <= lo || k >= hi) return;
+    mxL = Math.max(mxL, (G[k] || 0) + (T[k] || 0));
+    mxR = Math.max(mxR, E[k] || 0, H[k] || 0);
+  });
+
+  // POC / VA 70% z profilu dnia (T, widoczny zakres)
+  const tks = Object.keys(T).map(Number).sort((a, b) => a - b);
+  const tvs = tks.map(k => T[k]);
+  const totT = tvs.reduce((a, b) => a + b, 0);
+  let poc = null, vah = null, val = null;
+  if (tks.length) {
+    let pi = tvs.indexOf(Math.max.apply(null, tvs)), a0 = pi, a1 = pi, ac = tvs[pi];
+    while (ac < .7 * totT && (a0 > 0 || a1 < tks.length - 1)) {
+      const up = a1 < tks.length - 1 ? tvs[a1 + 1] : -1, dn = a0 > 0 ? tvs[a0 - 1] : -1;
+      if (up >= dn) ac += tvs[++a1]; else ac += tvs[--a0];
+    }
+    poc = tks[pi] + st / 2; vah = tks[a1] + st; val = tks[a0];
+  }
+
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+    (!document.documentElement.getAttribute('data-theme') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  const COL = { prior: dark ? '#9BB6D4' : '#0B1F3A', today: '#2BA8C4', hour: '#E35A12', mit: '#D5DAE0', mith: '#8B949E', price: dark ? '#F3F4F6' : '#111827', band: 'rgba(227,90,18,.14)', gold: '#C9A227' };
+  const ink = (typeof css === 'function' ? css('--ink') : null) || (dark ? '#eee' : '#111');
+  const mut = (typeof css === 'function' ? css('--mut') : null) || (dark ? '#aaa' : '#6B7280');
+  const grid = (typeof css === 'function' ? css('--line') : null) || (dark ? '#333' : '#E5E7EB');
+
+  const W = 1180, Hgt = 660, pl = 16, pr = 72, pt = 36, pb = 128, gap = 36;
+  const axisW = 56, mid = W - pr - axisW, paneW = (mid - pl - gap) / 2;
+  const xL0 = pl, xR0 = pl + paneW + gap, y0 = pt, ph = Hgt - pt - pb;
+  const y = p => y0 + (hi - p) / (hi - lo) * ph;
+  const xLenL = v => (v / mxL) * (paneW - 8);
+  const xLenR = v => (v / mxR) * (paneW - 8);
+  const bh = Math.max(1.2, (st / (hi - lo)) * ph - 0.4);
+
+  const d0 = hist[0] ? hist[0].slice(8, 10) + '.' + hist[0].slice(5, 7) : '';
+  const d1 = hist.length ? hist[hist.length - 1].slice(8, 10) + '.' + hist[hist.length - 1].slice(5, 7) : '';
+  const dayLab = day.slice(8, 10) + '.' + day.slice(5, 7) + '.' + day.slice(0, 4);
+
+  let g = '';
+  g += `<defs><pattern id="dafP2hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="${COL.mith}" stroke-width="1.6"/></pattern></defs>`;
+  const gridStep = niceStep((hi - lo) / 8);
+  for (let p = Math.ceil(lo / gridStep) * gridStep; p <= hi; p += gridStep) {
+    const yy = y(p);
+    g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
+    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${grid}"/>`;
+    g += `<text x="${W - pr + 6}" y="${yy + 4}" font-size="11" fill="${mut}" font-family="IBM Plex Mono,monospace">${fmtN(p, gridStep < 1 ? 2 : 0)}</text>`;
+  }
+  g += `<text x="${xL0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Poprzednie dni vs dziś</text>`;
+  g += `<text x="${xR0}" y="${pt - 14}" font-size="12.5" font-weight="700" fill="${ink}" font-family="IBM Plex Sans,sans-serif">Dziś wcześniej · mitygacja ost. 1 h</text>`;
+
+  const ks = [...keys].sort((a, b) => a - b);
+  let maxK = null, maxV = -1;
+  ks.forEach(k => {
+    if (k + st <= lo || k >= hi) return;
+    const yy = y(k + st);
+    const gv = G[k] || 0, tv = T[k] || 0, ev = E[k] || 0, hv = H[k] || 0;
+    sumG += gv; sumT += tv; sumH += hv; sumE += ev;
+    if (gv > 0) g += `<rect x="${xL0}" y="${yy}" width="${xLenL(gv).toFixed(2)}" height="${bh}" fill="${COL.prior}"/>`;
+    if (tv > 0) g += `<rect x="${xL0 + xLenL(gv)}" y="${yy}" width="${xLenL(tv).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`;
+    if (hv > 0) {
+      const hw = Math.min(xLenL(hv), xLenL(tv) || xLenL(hv));
+      g += `<rect x="${(xL0 + xLenL(gv + Math.max(0, tv - hv))).toFixed(2)}" y="${yy}" width="${hw.toFixed(2)}" height="${bh}" fill="${COL.hour}"/>`;
+    }
+    const mit = overlaps(k, lhLo, lhHi);
+    if (ev > 0) {
+      if (mit) { sumEmit += ev; nMit++; g += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="#D5DAE0"/><rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="url(#dafP2hatch)"/>`; }
+      else { sumEunm += ev; nUnm++; g += `<rect x="${xR0}" y="${yy}" width="${xLenR(ev).toFixed(2)}" height="${bh}" fill="${COL.today}"/>`; }
+    }
+    if (hv > 0) {
+      const ow = Math.max(1.5, xLenR(hv) * 0.55);
+      g += `<rect x="${xR0}" y="${yy}" width="${ow.toFixed(2)}" height="${Math.max(1, bh * 0.7)}" fill="${COL.hour}" fill-opacity="0.92"/>`;
+    }
+    const tot = gv + tv;
+    if (tot > maxV) { maxV = tot; maxK = k; }
+  });
+  if (maxK != null) {
+    const yy = y(maxK + st);
+    g += `<rect x="${xL0}" y="${yy}" width="${xLenL(maxV).toFixed(2)}" height="${bh}" fill="none" stroke="${COL.gold}" stroke-width="1.2"/>`;
+  }
+  if (lhLo != null && lhHi != null) {
+    const yTop = y(lhHi), yBot = y(lhLo);
+    g += `<rect x="${xR0}" y="${yTop}" width="${paneW}" height="${Math.max(1, yBot - yTop)}" fill="${COL.band}"/>`;
+    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yTop}" y2="${yTop}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
+    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yBot}" y2="${yBot}" stroke="${COL.hour}" stroke-width="1" stroke-dasharray="3 3"/>`;
+    g += `<text x="${xR0 + paneW - 4}" y="${yTop - 3}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">hi ost. 1 h ${fmtP(lhHi)}</text>`;
+    g += `<text x="${xR0 + paneW - 4}" y="${yBot + 11}" text-anchor="end" font-size="9.5" fill="${COL.hour}" font-family="IBM Plex Sans,sans-serif">lo ost. 1 h ${fmtP(lhLo)}</text>`;
+  }
+  const lvls = [
+    [todayHi, 'High', mut], [vah, 'VAH', mut], [poc, 'POC', COL.gold], [val, 'VAL', mut], [todayLo, 'Low', mut], [price, 'cena', COL.price]
+  ];
+  lvls.forEach(([p, lab, col]) => {
+    if (p == null || p < lo || p > hi) return;
+    const yy = y(p), dash = lab === 'cena' ? '5 4' : '3 4', sw = (lab === 'cena' || lab === 'POC') ? 1.3 : 0.9;
+    g += `<line x1="${xL0}" x2="${xL0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
+    g += `<line x1="${xR0}" x2="${xR0 + paneW}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
+  });
+  if (price != null) {
+    const yy = y(price);
+    g += `<rect x="${W - pr - axisW}" y="${yy - 8}" width="${axisW - 4}" height="16" rx="2" fill="${COL.price}"/>`;
+    g += `<text x="${W - pr - axisW + axisW / 2 - 2}" y="${yy + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${dark ? '#111' : '#fff'}" font-family="IBM Plex Mono,monospace">${fmtP(price)}</text>`;
+  }
+  g += `<rect x="${xL0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
+  g += `<rect x="${xR0}" y="${y0}" width="${paneW}" height="${ph}" fill="none" stroke="${grid}" stroke-width="1"/>`;
+
+  const fy = Hgt - pb + 20, pct = sumE > 0 ? (100 * sumEmit / sumE) : 0;
+  const swatch = (x, y, col, hatch) => {
+    let o = `<rect x="${x}" y="${y - 8}" width="10" height="10" fill="${col}" ${hatch ? 'stroke="#8B949E"' : ''}/>`;
+    if (hatch) o += `<rect x="${x}" y="${y - 8}" width="10" height="10" fill="url(#dafP2hatch)"/>`;
+    return o;
+  };
+  const line = (x, y, col, lab, hatch) => swatch(x, y, col, hatch) + `<text x="${x + 14}" y="${y}" font-size="11" fill="${ink}" font-family="IBM Plex Sans,sans-serif">${lab}</text>`;
+  g += line(xL0, fy, COL.prior, `poprzednie dni  suma ${fmtN(sumG, 0)}`);
+  g += line(xL0, fy + 16, COL.today, `dziś (bez ost. 1 h)  suma ${fmtN(sumT - sumH, 0)}`);
+  g += line(xL0, fy + 32, COL.hour, `ost. 1 h  ${t0}–${t1}  suma ${fmtN(sumH, 0)}`);
+  g += line(xL0, fy + 48, COL.gold, `max / POC`);
+  g += line(xR0, fy, COL.today, `dziś wcześniej – niezmitygowane  suma ${fmtN(sumEunm, 0)}  (${nUnm} bin)`);
+  g += line(xR0, fy + 16, '#D5DAE0', `zmitygowane w ost. 1 h  suma ${fmtN(sumEmit, 0)}  (${nMit} bin, ${fmtN(pct, 1)}%)`, true);
+  g += line(xR0, fy + 32, COL.hour, `ost. 1 h (cienki pasek)  suma ${fmtN(sumH, 0)}`);
+  g += `<text x="${xL0}" y="${fy + 70}" font-size="10.5" fill="${mut}" font-family="IBM Plex Sans,sans-serif">Zakres ost. 1 h (M5 high/low): ${lhLo != null ? fmtP(lhLo) : '–'} – ${lhHi != null ? fmtP(lhHi) : '–'} · krok bin ${fmtN(st, st < 1 ? 2 : 0)} · POC ${poc != null ? fmtP(poc) : '–'}  VAH ${vah != null ? fmtP(vah) : '–'}  VAL ${val != null ? fmtP(val) : '–'}</text>`;
+
+  const src = cur.src || pack[day].src || '';
+  const caveat = 'Prawy panel: baza to profil z godzin wcześniejszych niż ost. 1 h; bin jest zmitygowany, gdy [k, k+krok) nachodzi na zakres ost. 1 h (high/low świec M5), a nie przez dodanie wolumenu ost. godziny. Cienki pomarańcz to wolumen ost. 1 h (kontekst). Źródło: komórki footprintu M5 DA Flow (bid+ask).'
+    + (src ? ' ' + src + '.' : '');
+
+  $('p2WinPx').innerHTML = `US500 · ${dayLab} · ost. 1 h ${t0}–${t1}${price != null ? ' · cena ' + fmtP(price) : ''} · ${hist.length} sesji ${d0}–${d1}`;
+  $('p2WinB').innerHTML = `<svg id="p2svg" viewBox="0 0 ${W} ${Hgt}" width="100%" style="display:block;max-height:min(680px,70vh)" role="img" aria-label="Dwa panele profilu niezmitygowanego">${g}</svg><p class="note">${caveat}</p>`;
+  window._P2_DAF = { t0, t1, lhLo, lhHi, st, sumE, sumEmit, sumEunm, sumH, sumG, sumT, nMit, nUnm, price, poc, day, lastI, lo, hi };
+}
+
