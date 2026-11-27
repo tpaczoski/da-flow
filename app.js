@@ -2676,7 +2676,99 @@ function ctaSigned(v, d){
   return s + Math.abs(v).toLocaleString('pl-PL', {minimumFractionDigits: d, maximumFractionDigits: d});
 }
 function ctaCls(v){ return v > 0 ? 'ctpos' : (v < 0 ? 'ctneg' : ''); }
+
+function ctaHistFromSeries(D){
+  const series = (D && D.series) || [];
+  const hist = series.map((r, i) => {
+    const signs = [];
+    const c = r.c;
+    [20,50,100,200].forEach(n => {
+      const v = r['sma' + n];
+      if (c == null || v == null || !isFinite(c) || !isFinite(v)) return;
+      signs.push(c > v ? 1 : (c < v ? -1 : 0));
+    });
+    const T = signs.length ? signs.reduce((a,b)=>a+b,0) / signs.length : null;
+    const expo = r.exposure, expo5 = i >= 5 ? series[i-5].exposure : null;
+    const chg5 = (expo == null || expo5 == null || !isFinite(expo) || !isFinite(expo5)) ? null : expo - expo5;
+    const vol = chg5 == null ? null : Math.max(-1, Math.min(1, chg5 / 0.10));
+    const parts = [T, vol].filter(x => x != null && isFinite(x));
+    const combined = parts.length ? parts.reduce((a,b)=>a+b,0) / parts.length : null;
+    let label = 'Brak wystarczających danych';
+    if (combined != null) {
+      if (combined >= 0.15) label = 'Bliżej kupowania';
+      else if (combined <= -0.15) label = 'Bliżej sprzedawania';
+      else label = 'Bez wyraźnej przewagi (blisko neutralnego)';
+    }
+    return {d: r.d, combined, from_trend: T, from_vol: vol, label};
+  });
+  const today = hist.length ? hist[hist.length-1] : null;
+  const d1 = hist.length >= 2 ? hist[hist.length-2] : null;
+  const prev5 = hist.slice(0, -1).filter(h => h.combined != null).slice(-5);
+  const avg5 = prev5.length ? prev5.reduce((a,h)=>a+h.combined,0) / prev5.length : null;
+  const todayC = today && today.combined;
+  const delta = ref => (todayC == null || ref == null || !isFinite(todayC) || !isFinite(ref)) ? null : todayC - ref;
+  const fd = d => d ? `${String(d).slice(8,10)}.${String(d).slice(5,7)}.${String(d).slice(0,4)}` : '';
+  const vs = {
+    today_incomplete: !!D.sesja_niepelna,
+    d1: (d1 && d1.combined != null) ? {d: d1.d, d_pl: fd(d1.d), combined: d1.combined, delta: delta(d1.combined)} : null,
+    avg5: avg5 == null ? null : {n: prev5.length, from: prev5[0].d, to: prev5[prev5.length-1].d, from_pl: fd(prev5[0].d), to_pl: fd(prev5[prev5.length-1].d), avg: avg5, delta: delta(avg5)},
+    sessions: hist.slice(-10)
+  };
+  if (vs.sessions.length && D.sesja_niepelna) vs.sessions[vs.sessions.length-1].niepelna = true;
+  return vs;
+}
+function ctaVsTone(delta){
+  if (delta == null || !isFinite(delta)) return 'flat';
+  if (Math.abs(delta) < 0.02) return 'flat';
+  return delta > 0 ? 'up' : 'down';
+}
+function ctaVsWord(delta){
+  if (delta == null || !isFinite(delta)) return 'brak porównania';
+  if (Math.abs(delta) < 0.02) return 'bez istotnej zmiany';
+  if (delta > 0) return 'bliżej kupowania niż odniesienie';
+  return 'bliżej sprzedawania niż odniesienie';
+}
+function ctaVsHtml(D){
+  const sm = (D && D.summary) || {};
+  let vs = sm.vs;
+  if (!vs || (!vs.d1 && !vs.avg5 && !(vs.sessions && vs.sessions.length))) vs = ctaHistFromSeries(D);
+  if (!vs) return '';
+  const chip = (key, val, sub, delta) => {
+    const tone = ctaVsTone(delta);
+    const arrow = tone === 'up' ? '▲' : (tone === 'down' ? '▼' : '●');
+    return `<div class="ctvchip ${tone}"><span class="k">${key}</span><span class="v">${arrow} ${ctaSigned(delta, 2)}</span><span class="s">${sub}</span></div>`;
+  };
+  let chips = '';
+  if (vs.d1) {
+    const d1 = vs.d1;
+    chips += chip('vs D−1 (' + (d1.d_pl || '') + ')', d1.delta,
+      `wczoraj ${ctaSigned(d1.combined, 2)} → dziś ${ctaSigned(sm.combined, 2)} · ${ctaVsWord(d1.delta)}`, d1.delta);
+  }
+  if (vs.avg5) {
+    const a = vs.avg5;
+    chips += chip('vs śr. ' + (a.n || 5) + ' sesji', a.delta,
+      `śr. ${ctaSigned(a.avg, 2)} z ${a.from_pl || ''}–${a.to_pl || ''} (bez dziś) · ${ctaVsWord(a.delta)}`, a.delta);
+  }
+  const sess = vs.sessions || [];
+  const bars = sess.map((h, i) => {
+    const v = h.combined;
+    const last = i === sess.length - 1;
+    if (v == null || !isFinite(v)) return `<div class="ctbar"><div class="tr"></div><span>—</span></div>`;
+    const cls = (v > 0 ? 'pos' : (v < 0 ? 'neg' : '')) + (last ? ' today' : '');
+    const pct = Math.max(4, Math.min(50, Math.abs(v) * 50));
+    const day = (h.d_pl || h.d || '').slice(0, 5);
+    const tag = last && (h.niepelna || vs.today_incomplete) ? '·dziś*' : (last ? '·dziś' : '');
+    const style = v >= 0 ? `height:${pct}%` : `height:${pct}%`;
+    return `<div class="ctbar ${cls}" title="${h.d_pl || h.d || ''}: ${ctaSigned(v, 2)} ${h.label || ''}"><div class="tr"><i style="${style}"></i></div><span>${day}${tag}</span></div>`;
+  }).join('');
+  const note = vs.today_incomplete
+    ? 'Dziś sesja niepełna — porównanie z zamknięciami poprzednich dni. Słupki: presja combined z 10 ostatnich sesji (skala −1…+1, linia = 0). Dodatnia Δ = presja bliżej kupowania niż odniesienie.'
+    : 'Słupki: presja combined z 10 ostatnich sesji (skala −1…+1, linia = 0). Średnia 5 sesji liczy tylko dni przed dniem bieżącym. Dodatnia Δ = presja bliżej kupowania niż odniesienie.';
+  if (!chips && !bars) return '';
+  return `<div class="ctvs"><h4>Zmiana presji względem poprzednich sesji</h4><div class="ctvrow">${chips}</div><div class="ctbars" aria-label="Presja z 10 ostatnich sesji">${bars}</div><p class="ctnote">${note}</p></div>`;
+}
 function drawCtaWin(){
+
   const box = $('ctWin'); if (!box) return;
   box.hidden = !S.ctw;
   if (!S.ctw) return;
@@ -2701,6 +2793,7 @@ function drawCtaWin(){
   const chg5 = vo.exposure_chg_5d, chgLab = chg5 == null ? '–' : `${ctaSigned(chg5, 3)} (${chg5 < 0 ? 'spada — presja na redukcję ekspozycji' : (chg5 > 0 ? 'rośnie — presja na zwiększenie ekspozycji' : 'bez zmiany')})`;
   $('ctWinB').innerHTML = `
     <div class="ctsum ${kind}"><b>${lab}</b><span>trend ${ctaSigned(sm.from_trend, 2)} · noga vol-control ${ctaSigned(sm.from_vol, 2)} · łącznie ${ctaSigned(sm.combined, 2)} (skala −1…+1)</span></div>
+    ${ctaVsHtml(D)}
     <p class="ctdisc">${sm.disclaimer || ''}</p>
     <div class="ctsec"><h3>1. Trend CTA — proxy SMA</h3>
       <div class="ctgrid">

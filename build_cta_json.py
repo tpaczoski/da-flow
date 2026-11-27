@@ -712,7 +712,117 @@ def build() -> dict:
         },
         "series": chart_rows,
     }
+    obj["summary"]["vs"] = attach_pressure_history(chart_rows, bool(niepelna))
     return obj
+
+
+
+def session_pressure(row: dict, expo_5d):
+    """Presja combined dla jednej sesji — ten sam wzór co podsumowanie okna."""
+    c = row.get("c")
+    signs = []
+    for n in SMA_NS:
+        v = row.get(f"sma{n}")
+        if c is None or v is None:
+            continue
+        signs.append(1 if c > v else (-1 if c < v else 0))
+    T = (sum(signs) / len(signs)) if signs else None
+    expo = row.get("exposure")
+    chg5 = None if expo is None or expo_5d is None else expo - expo_5d
+    vol_leg = None if chg5 is None else max(-1.0, min(1.0, chg5 / 0.10))
+    parts = [x for x in (T, vol_leg) if x is not None]
+    combined = sum(parts) / len(parts) if parts else None
+    if combined is None:
+        label = "Brak wystarczających danych"
+    elif combined >= 0.15:
+        label = "Bliżej kupowania"
+    elif combined <= -0.15:
+        label = "Bliżej sprzedawania"
+    else:
+        label = "Bez wyraźnej przewagi (blisko neutralnego)"
+    return {
+        "from_trend": None if T is None else round(T, 4),
+        "from_vol": None if vol_leg is None else round(vol_leg, 4),
+        "combined": None if combined is None else round(combined, 4),
+        "exposure_chg_5d": None if chg5 is None else round(chg5, 4),
+        "label": label,
+    }
+
+
+def attach_pressure_history(rows: list, niepelna: bool) -> dict:
+    """Historia presji z tej samej serii SMA / ekspozycji (bez wymyślania wartości).
+
+    Δ vs D-1 = combined dziś − combined poprzedniej sesji.
+    Δ vs śr. 5 sesji = combined dziś − średnia z 5 sesji przed dniem bieżącym
+    (zawsze bez dziś, także po zamknięciu). Dodatnia Δ = presja bliżej kupowania
+    niż odniesienie.
+    """
+    hist = []
+    for i, row in enumerate(rows):
+        expo_5d = rows[i - 5].get("exposure") if i >= 5 else None
+        pr = session_pressure(row, expo_5d)
+        row["from_trend"] = pr["from_trend"]
+        row["from_vol"] = pr["from_vol"]
+        row["combined"] = pr["combined"]
+        rec = {
+            "d": row.get("d"),
+            "d_pl": fmt_pl(row.get("d")),
+            "combined": pr["combined"],
+            "from_trend": pr["from_trend"],
+            "from_vol": pr["from_vol"],
+            "label": pr["label"],
+        }
+        hist.append(rec)
+
+    today = hist[-1] if hist else None
+    d1 = hist[-2] if len(hist) >= 2 else None
+    prev5 = [h for h in hist[:-1] if h.get("combined") is not None][-5:]
+    avg5 = (sum(h["combined"] for h in prev5) / len(prev5)) if prev5 else None
+    today_c = today["combined"] if today else None
+
+    def delta(ref):
+        if today_c is None or ref is None:
+            return None
+        return round(today_c - ref, 4)
+
+    vs_d1 = None
+    if d1 and d1.get("combined") is not None:
+        vs_d1 = {
+            "d": d1["d"],
+            "d_pl": d1["d_pl"],
+            "combined": d1["combined"],
+            "delta": delta(d1["combined"]),
+        }
+    vs_avg5 = None
+    if avg5 is not None:
+        vs_avg5 = {
+            "n": len(prev5),
+            "from": prev5[0]["d"],
+            "to": prev5[-1]["d"],
+            "from_pl": prev5[0]["d_pl"],
+            "to_pl": prev5[-1]["d_pl"],
+            "avg": round(avg5, 4),
+            "delta": delta(avg5),
+        }
+
+    sessions = hist[-10:]
+    if sessions and niepelna:
+        sessions[-1] = dict(sessions[-1], niepelna=True)
+
+    return {
+        "today_incomplete": bool(niepelna),
+        "d1": vs_d1,
+        "avg5": vs_avg5,
+        "sessions": sessions,
+        "n_hist": sum(1 for h in hist if h.get("combined") is not None),
+        "note": (
+            "Presja = combined (średnia nogi trendu i nogi vol-control, skala −1…+1), "
+            "ten sam wzór co linia podsumowania. "
+            "Δ vs D−1 = presja dziś − presja poprzedniej sesji. "
+            "Δ vs śr. 5 sesji = presja dziś − średnia z 5 poprzednich sesji (bez dnia bieżącego). "
+            "Dodatnia Δ oznacza presję bliżej kupowania niż odniesienie."
+        ),
+    }
 
 
 def write_obj(obj: dict, path: Path = OUT) -> Path:
@@ -744,6 +854,11 @@ def main() -> int:
     fl = obj["flow"]
     print(f"  flow n={fl['n']} cumΔ {fl['cum_delta']}  Δup {fl['delta_up']} ({fl['n_up']})  Δdn {fl['delta_down']} ({fl['n_down']})  dn/up {fl['ratio_down_vs_up']}")
     print(f"  PODSUMOWANIE: {sm['label']}  combined={sm['combined']} (trend {sm['from_trend']} + vol {sm['from_vol']})")
+    vs = sm.get("vs") or {}
+    d1, a5 = vs.get("d1") or {}, vs.get("avg5") or {}
+    print(f"  VS D-1 {d1.get('d_pl')} comb={d1.get('combined')} Δ={d1.get('delta')}; "
+          f"śr. {a5.get('n')} sesji {a5.get('from_pl')}–{a5.get('to_pl')} avg={a5.get('avg')} Δ={a5.get('delta')}")
+
     return 0
 
 
